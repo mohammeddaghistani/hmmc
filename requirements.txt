@@ -14,4 +14,3 @@ geopy==2.4.1
 arabic-reshaper
 python-bidi
 rich<14.0.0
-streamlit
