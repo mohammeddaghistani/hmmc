@@ -7,15 +7,7 @@ def apply_custom_style():
         layout="wide",
         initial_sidebar_state="expanded"
     )
-    # إخفاء عناصر Streamlit لتحسين المظهر
-    st.markdown("""
-        <style>
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-        .stDeployButton {display:none;}
-        </style>
-    """, unsafe_allow_html=True)
+    st.markdown("""<style>#MainMenu, footer, header {visibility: hidden;} .stDeployButton {display:none;}</style>""", unsafe_allow_html=True)
 
 def get_custom_css():
     return """
@@ -27,22 +19,7 @@ def get_custom_css():
         direction: rtl;
         text-align: right;
     }
-
-    /* تحسينات الجوال والـ Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #f8f9fa;
-        border-left: 1px solid #e0e0e0;
-    }
     
-    .stButton>button {
-        width: 100%;
-        border-radius: 8px;
-        height: 3em;
-        font-weight: bold;
-        background-color: #1E3A8A;
-        color: white;
-    }
-
     .main-header {
         background: linear-gradient(90deg, #1E3A8A 0%, #3B82F6 100%);
         color: white;
@@ -52,11 +29,20 @@ def get_custom_css():
         text-align: center;
     }
 
-
-    /* تنسيق الجوال */
+    /* تحسينات العرض للجوال */
     @media (max-width: 768px) {
         .main-header h1 { font-size: 1.4rem !important; }
-        .stTabs [data-baseweb="tab"] { font-size: 0.9rem !important; padding: 10px !important; }
+        .stButton>button { height: 3.5em; font-size: 1rem !important; }
+        [data-testid="stSidebar"] { width: 80% !important; }
+    }
+    
+    .stButton>button {
+        width: 100%;
+        border-radius: 8px;
+        background-color: #1E3A8A;
+        color: white;
+        font-weight: bold;
+        transition: 0.3s;
     }
     </style>
     """
