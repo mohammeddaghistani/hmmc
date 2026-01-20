@@ -1,0 +1,15 @@
+{
+  "hosting": {
+    "public": "public",
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "rental-public",
+          "region": "me-west1",
+          "projectId": "direct-volt-484721-p7"
+        }
+      }
+    ]
+  }
+}
