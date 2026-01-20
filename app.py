@@ -5,7 +5,7 @@ import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 
-# استيراد الوحدات المحلية من مجلد modules
+# استيراد الوحدات المحلية
 from modules.db import init_db, ensure_settings, add_deal
 from modules.auth import login_required, logout
 from modules.dashboard import render_dashboard
@@ -17,7 +17,7 @@ from modules.site_rental_value import SiteRentalValuation
 from modules.municipal_lease_types import MunicipalLeaseTypes
 from modules.investment_committee import InvestmentCommitteeSystem
 
-# تطبيق التصميم والتهيئة الأولية
+# تطبيق التصميم والتهيئة
 apply_custom_style()
 
 def get_coordinates_from_address(address):
@@ -32,7 +32,7 @@ def get_coordinates_from_address(address):
     return None
 
 class EnhancedSiteRentalValuation(SiteRentalValuation):
-    """النسخة الاحترافية لنظام التقييم مع دعم الخرائط التفاعلية"""
+    """النسخة الاحترافية الكاملة لنظام التقييم"""
     
     def render_enhanced_valuation(self):
         tab1, tab2, tab3 = st.tabs(["📍 تحديد الموقع الجغرافي", "💰 التقييم الإيجاري", "📄 مراجعة العقد"])
@@ -48,13 +48,13 @@ class EnhancedSiteRentalValuation(SiteRentalValuation):
             st.info("قم بالنقر على الخريطة لتحديد موقع العقار بدقة")
             m = folium.Map(location=[24.7136, 46.6753], zoom_start=6)
             m.add_child(folium.LatLngPopup())
-            map_data = st_folium(m, height=400, width="100%")
+            map_data = st_folium(m, height=400, width="100%", key="main_map")
             
             lat, lng = None, None
             if map_data and map_data.get("last_clicked"):
                 lat = map_data["last_clicked"]["lat"]
                 lng = map_data["last_clicked"]["lng"]
-                st.success(f"تم التقاط الإحداثيات بنجاح: {lat:.5f}, {lng:.5f}")
+                st.success(f"تم التقاط الإحداثيات: {lat:.5f}, {lng:.5f}")
 
         with col_inputs:
             with st.form("site_info_main_form"):
@@ -69,7 +69,7 @@ class EnhancedSiteRentalValuation(SiteRentalValuation):
                             'name': site_name, 'area': site_area, 'city': city,
                             'lat': lat, 'lng': lng, 'type': prop_type
                         }
-                        st.success("✅ تم حفظ بيانات الموقع بنجاح")
+                        st.success("✅ تم حفظ بيانات الموقع")
                     else:
                         st.error("⚠️ يرجى تحديد الموقع على الخريطة أولاً")
 
@@ -80,14 +80,25 @@ class EnhancedSiteRentalValuation(SiteRentalValuation):
             return
             
         if st.session_state.site_info.get('lat'):
-            st.markdown("**الموقع المختار:**")
             mini_map = folium.Map(location=[st.session_state.site_info['lat'], st.session_state.site_info['lng']], zoom_start=15)
             folium.Marker([st.session_state.site_info['lat'], st.session_state.site_info['lng']]).add_to(mini_map)
-            st_folium(mini_map, height=200, width="100%")
+            st_folium(mini_map, height=200, width="100%", key="mini_map")
         
         base_rate = st.number_input("السعر المقترح للمتر (ريال)", value=100.0)
         total = base_rate * st.session_state.site_info['area']
+        st.session_state.calculated_rent = total
         st.metric("إجمالي القيمة الإيجارية السنوية", f"{total:,.2f} ريال")
+
+    def render_contract_tab(self):
+        """هذه هي الدالة التي كانت مفقودة وتسببت في الخطأ"""
+        st.subheader("📄 مراجعة العقد والموافقات")
+        if 'site_info' not in st.session_state or 'calculated_rent' not in st.session_state:
+            st.warning("⚠️ يرجى إكمال بيانات الموقع والتقييم أولاً")
+            return
+        
+        st.info("بناءً على البيانات المدخلة، تم تجهيز مسودة العقد الأولية.")
+        if st.button("📋 عرض مسودة الاتفاقية"):
+            self.show_agreement_preview(st.session_state.calculated_rent, st.session_state.site_info['type'])
 
 def main():
     st.markdown(get_custom_css(), unsafe_allow_html=True)
@@ -116,17 +127,17 @@ def render_login_page():
 def render_sidebar_navigation():
     with st.sidebar:
         st.title(f"مرحباً {st.session_state.user_name}")
-        st.caption(f"صلاحية الوصول: {st.session_state.user_role}")
+        st.caption(f"الدور: {st.session_state.user_role}")
         st.markdown("---")
         
         menu = {
             "📊 لوحة التحكم": "dashboard",
             "📈 التقييم العلمي": "evaluation",
             "🏛️ أنواع التأجير": "lease_types",
-            "📍 قيمة الموقع الجغرافي": "site_rental",
+            "📍 قيمة الموقع": "site_rental",
             "👥 لجنة الاستثمار": "committee",
-            "📑 التقارير الإحصائية": "reports",
-            "⚙️ الإدارة العامة": "admin"
+            "📑 التقارير": "reports",
+            "⚙️ الإدارة": "admin"
         }
         
         for label, page in menu.items():
@@ -135,7 +146,7 @@ def render_sidebar_navigation():
                 st.rerun()
         
         st.markdown("---")
-        if st.button("🚪 تسجيل الخروج", type="secondary", use_container_width=True):
+        if st.button("🚪 خروج", type="secondary", use_container_width=True):
             logout(); st.rerun()
 
     cp = st.session_state.get('current_page', 'dashboard')
