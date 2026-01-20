@@ -5,7 +5,7 @@ import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 
-# استيراد الوحدات (تأكد من وجودها في مجلد modules)
+# استيراد الوحدات المحلية
 from modules.db import init_db, ensure_settings, add_deal
 from modules.auth import login_required, logout
 from modules.dashboard import render_dashboard
@@ -17,15 +17,22 @@ from modules.site_rental_value import SiteRentalValuation
 from modules.municipal_lease_types import MunicipalLeaseTypes
 from modules.investment_committee import InvestmentCommitteeSystem
 
-# تهيئة التصميم
+# تطبيق التصميم والتهيئة
 apply_custom_style()
 
-# تهيئة حالة الجلسة الأصلية
-if 'authenticated' not in st.session_state: st.session_state.authenticated = False
-if 'current_page' not in st.session_state: st.session_state.current_page = "dashboard"
+def get_coordinates_from_address(address):
+    """تحويل العنوان النصي إلى إحداثيات جغرافية"""
+    try:
+        geolocator = Nominatim(user_agent="rental_app")
+        location = geolocator.geocode(address)
+        if location:
+            return location.latitude, location.longitude
+    except:
+        return None
+    return None
 
 class EnhancedSiteRentalValuation(SiteRentalValuation):
-    """النسخة الكاملة المستعادة مع الخرائط والتقارير والعقود"""
+    """نسخة احترافية تدمج الخريطة مع منطق التقييم والعقود الأصلي"""
     
     def render_enhanced_valuation(self):
         tab1, tab2, tab3 = st.tabs(["📍 معلومات الموقع والخريطة", "💰 التقييم الإيجاري", "📄 العقد والموافقات"])
@@ -41,16 +48,16 @@ class EnhancedSiteRentalValuation(SiteRentalValuation):
             st.info("انقر على الخريطة لتحديد موقع العقار بدقة")
             m = folium.Map(location=[24.7136, 46.6753], zoom_start=6)
             m.add_child(folium.LatLngPopup())
-            map_data = st_folium(m, height=400, width="100%", key="site_map")
+            map_data = st_folium(m, height=400, width="100%", key="main_map")
             
             lat, lng = None, None
             if map_data and map_data.get("last_clicked"):
                 lat = map_data["last_clicked"]["lat"]
                 lng = map_data["last_clicked"]["lng"]
-                st.success(f"📍 الإحداثيات الملتقطة: {lat:.5f}, {lng:.5f}")
+                st.success(f"📍 تم التقاط الإحداثيات: {lat:.5f}, {lng:.5f}")
 
         with col_inputs:
-            with st.form("site_info_full_form"):
+            with st.form("site_info_form"):
                 site_name = st.text_input("اسم الموقع الرسمي")
                 site_area = st.number_input("مساحة الموقع (م²)", min_value=1.0, value=1000.0)
                 city = st.selectbox("المدينة", ["الرياض", "جدة", "الدمام", "مكة", "المدينة"])
@@ -91,16 +98,21 @@ class EnhancedSiteRentalValuation(SiteRentalValuation):
             st.warning("⚠️ أكمل التقييم أولاً")
             return
         
-        st.info("تم توليد مسودة العقد بناءً على لوائح التصرف بالعقارات البلدية.")
+        st.info("تم توليد مسودة العقد بناءً على البيانات المدخلة.")
         if st.button("📝 عرض مسودة الاتفاقية"):
+            # استدعاء عرض المسودة الأصلي من الكلاس الأب
             self.show_agreement_preview(st.session_state.calculated_rent, st.session_state.site_info['zoning'])
 
 def main():
     st.markdown(get_custom_css(), unsafe_allow_html=True)
+    
+    if 'authenticated' not in st.session_state: st.session_state.authenticated = False
+    if 'current_page' not in st.session_state: st.session_state.current_page = "dashboard"
+
     if not st.session_state.authenticated:
         render_login_page()
     else:
-        render_sidebar_navigation()
+        render_sidebar_app()
 
 def render_login_page():
     st.markdown('<div class="main-header"><h1>🏛️ نظام تأجير العقارات البلدية</h1></div>', unsafe_allow_html=True)
@@ -109,13 +121,13 @@ def render_login_page():
         with st.form("login_form"):
             u = st.text_input("👤 اسم المستخدم")
             p = st.text_input("🔒 كلمة المرور", type="password")
-            if st.form_submit_button("دخول"):
+            if st.form_submit_button("دخول للنظام"):
                 user = login_required(u, p)
                 if user:
                     st.session_state.update({"authenticated": True, "user_role": user['role'], "user_name": user['name']})
                     st.rerun()
 
-def render_sidebar_navigation():
+def render_sidebar_app():
     with st.sidebar:
         st.title(f"👤 {st.session_state.user_name}")
         st.markdown("---")
@@ -135,7 +147,7 @@ def render_sidebar_navigation():
         if st.button("🚪 خروج", type="secondary"):
             logout(); st.rerun()
 
-    cp = st.session_state.current_page
+    cp = st.session_state.get('current_page', 'dashboard')
     if cp == 'dashboard': render_dashboard(st.session_state.user_role)
     elif cp == 'evaluation': render_evaluation_module(st.session_state.user_role)
     elif cp == 'lease_types': 
@@ -146,8 +158,9 @@ def render_sidebar_navigation():
         valuator.render_enhanced_valuation()
     elif cp == 'committee':
         st.header("👥 لجنة الاستثمار")
-        InvestmentCommitteeSystem().form_committee("الأمانة", st.session_state.get('site_info', {}))
-        st.write("إدارة قرارات اللجنة وفقاً للمادة 17.")
+        # استرجاع المنطق الأصلي للجنة
+        comm = InvestmentCommitteeSystem()
+        comm.form_committee("الأمانة", st.session_state.get('site_info', {}))
     elif cp == 'reports': render_report_module(st.session_state.user_role)
     elif cp == 'admin': render_admin_panel(st.session_state.user_role)
 
