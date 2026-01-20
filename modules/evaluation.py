@@ -80,10 +80,22 @@ def render_new_evaluation_advanced():
             current_rent = st.number_input("💰 الإيجار الحالي (سنوي)", min_value=0.0, value=0.0)
             occupancy_rate = st.slider("🏢 نسبة الإشغال الحالية %", 0, 100, 85)
             
-            # الهدف من التقييم
+            # ⬅️ تحديث: إضافة خيار "تحديد القيمة الإيجارية للموقع"
             valuation_purpose = st.selectbox(
                 "🎯 الغرض من التقييم",
-                ["تحديد القيمة السوقية", "التمويل البنكي", "الشراكة", "التأمين", "الضرائب", "التخطيط المالي"]
+                [
+                    "تحديد القيمة الإيجارية للموقع",  # ⬅️ الخيار الجديد
+                    "تحديد القيمة السوقية", 
+                    "التمويل البنكي", 
+                    "الشراكة", 
+                    "التأمين", 
+                    "الضرائب", 
+                    "التخطيط المالي",
+                    "التسعير للإيجار",
+                    "تحديد رسوم التملك",
+                    "التثمين للاستحواذ",
+                    "التقييم للغرامات"
+                ]
             )
         
         st.markdown("---")
@@ -161,7 +173,7 @@ def render_new_evaluation_advanced():
                         'zoning': zoning,
                         'current_rent': current_rent,
                         'occupancy_rate': occupancy_rate,
-                        'valuation_purpose': valuation_purpose
+                        'valuation_purpose': valuation_purpose  # ⬅️ تحديث
                     },
                     {
                         'comparables_count': comparables_count if 'comparables_count' in locals() else 0,
@@ -534,7 +546,7 @@ def generate_detailed_report(results, property_data):
             'valuation_results': results,
             'valuation_date': datetime.now().strftime("%Y-%m-%d"),
             'effective_date': datetime.now().strftime("%Y-%m-%d"),
-            'purpose': 'تحديد القيمة السوقية',
+            'purpose': property_data.get('valuation_purpose', 'تحديد القيمة السوقية'),  # ⬅️ تحديث
             'intended_users': ['العميل'],
             'market_condition': 'stable'
         }
@@ -966,7 +978,7 @@ def analyze_profits_sensitivity():
     col1, col2 = st.columns(2)
     
     with col1:
-        revenue = st.number_input("الإيرادات السنوية (ر.س)", value=2000000.0)
+        revenue = st.number_input("الإيرادات السنوية (ريال)", value=2000000.0)
         ebitda_margin = st.slider("هامش EBITDA %", 20, 60, 40)
         rent_share = st.slider("حصة الإيجار من الربح %", 30, 70, 50)
     
@@ -975,7 +987,7 @@ def analyze_profits_sensitivity():
         depreciation_percent = st.slider("نسبة الإهلاك %", 2, 10, 5)
         tax_rate = st.slider("معدل الضريبة %", 10, 30, 20)
     
-    # الحساب
+    # الحسابات
     ebitda = revenue * (ebitda_margin / 100)
     operating_costs = revenue * (operating_cost_percent / 100)
     depreciation = revenue * (depreciation_percent / 100)
@@ -985,9 +997,9 @@ def analyze_profits_sensitivity():
     market_rent = divisible_balance * (rent_share / 100)
     
     # عرض النتائج
-    st.metric("الإيجار السوقي", f"{market_rent:,.0f} ر.س/سنوياً")
-    st.metric("الأرباح قبل الفوائد والضرائب (EBITDA)", f"{ebitda:,.0f} ر.س")
-    st.metric("الرصيد القابل للقسمة", f"{divisible_balance:,.0f} ر.س")
+    st.metric("الإيجار السوقي", f"{market_rent:,.0f} ريال/سنوياً")
+    st.metric("الأرباح قبل الفوائد والضرائب (EBITDA)", f"{ebitda:,.0f} ريال")
+    st.metric("الرصيد القابل للقسمة", f"{divisible_balance:,.0f} ريال")
     
     # تحليل تأثير هامش الربح
     st.subheader("📊 تأثير تغير هامش الربح على الإيجار")
@@ -1004,7 +1016,7 @@ def analyze_profits_sensitivity():
     
     data = pd.DataFrame({
         'هامش EBITDA %': margins,
-        'الإيجار (ر.س)': rents
+        'الإيجار (ريال)': rents
     })
     
     st.bar_chart(data.set_index('هامش EBITDA %'))
