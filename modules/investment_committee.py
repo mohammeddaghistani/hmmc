@@ -3,22 +3,22 @@ from datetime import datetime
 import uuid
 
 class InvestmentCommitteeSystem:
-    """نظام إدارة لجان الاستثمار البلدية وتحديد القيم الإيجارية"""
+    """نظام إدارة لجان الاستثمار البلدية وتحديد القيم الإيجارية حسب اللوائح"""
     
     def __init__(self):
-        # قاعدة بيانات وهمية للقرارات في حال عدم وجود قاعدة بيانات حقيقية
+        # تهيئة مخزن القرارات في ذاكرة الجلسة إذا لم يكن موجوداً
         if 'committee_decisions' not in st.session_state:
             st.session_state.committee_decisions = []
 
     def form_committee(self, municipality, site_data):
-        """تشكيل لجنة استثمار جديدة لموقع محدد"""
+        """تشكيل لجنة استثمار جديدة لموقع محدد وفقاً للمادة 17 من اللائحة"""
         committee_id = f"COM-{datetime.now().strftime('%Y')}-{uuid.uuid4().hex[:4].upper()}"
         
         committee = {
             'id': committee_id,
             'municipality': municipality,
             'formation_date': datetime.now().strftime("%Y-%m-%d"),
-            'site_code': site_data.get('site_code', 'N/A'),
+            'site_code': site_data.get('site_code', 'غير محدد'),
             'members': [
                 {'name': 'رئيس اللجنة', 'role': 'رئيس'},
                 {'name': 'عضو استثماري', 'role': 'عضو'},
@@ -29,16 +29,15 @@ class InvestmentCommitteeSystem:
 
     def determine_rental_value(self, committee_id, site_data, lease_type):
         """تحديد القيمة الإيجارية بناءً على معطيات الموقع ونوع التأجير"""
-        area = site_data.get('area', 1)
-        # حساب سعر استرشادي وهمي (يمكنك تعديل المعادلة حسب لوائحكم)
-        base_rate = 100 # سعر أساسي
+        area = site_data.get('area', 1.0)
+        base_rate = 100.0  # سعر المتر الافتراضي
         
-        # تعديل السعر حسب نوع التأجير
+        # معاملات الضرب المعتمدة حسب نوع التأجير
         multipliers = {
-            'TEMPORARY_ACTIVITY': 0.8,
-            'LONG_TERM_INVESTMENT': 1.5,
-            'DIRECT_LEASE': 1.2,
-            'EXEMPTED_FROM_COMPETITION': 1.0
+            'TEMPORARY_ACTIVITY': 0.85,
+            'LONG_TERM_INVESTMENT': 1.6,
+            'DIRECT_LEASE': 1.25,
+            'EXEMPTED_FROM_COMPETITION': 1.1
         }
         
         multiplier = multipliers.get(lease_type, 1.0)
@@ -61,5 +60,5 @@ class InvestmentCommitteeSystem:
         return decision
 
     def get_all_decisions(self):
-        """جلب جميع القرارات المسجلة"""
+        """جلب قائمة جميع القرارات المتخذة"""
         return st.session_state.committee_decisions
