@@ -22,13 +22,11 @@ def ensure_settings():
     cursor = conn.cursor()
     defaults = [
         ('system_name', 'نظام التقييم الإيجاري البلدي'),
-        ('mult_temporary', '0.85'),
-        ('mult_long_term', '1.60'),
-        ('mult_direct', '1.25'),
-        ('mult_exempt', '1.10'),
+        ('mult_temp', '0.85'), # معامل التأجير المؤقت
+        ('mult_long', '1.60'), # معامل الاستثمار طويل الأجل
+        ('mult_direct', '1.25'), # معامل التأجير المباشر
         ('construction_cost_m2', '3500'),
-        ('default_discount_rate', '0.10'),
-        ('default_yield', '0.08')
+        ('default_discount_rate', '0.10')
     ]
     for key, value in defaults:
         cursor.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', (key, value))
@@ -63,10 +61,3 @@ def add_deal(deal_data):
     conn.close()
     st.cache_data.clear()
     return deal_id
-
-@st.cache_data(ttl=600)
-def get_recent_deals(limit=10):
-    conn = sqlite3.connect('rental_evaluation.db')
-    df = pd.read_sql_query(f'SELECT * FROM deals ORDER BY deal_date DESC LIMIT {limit}', conn)
-    conn.close()
-    return df
