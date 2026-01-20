@@ -14,3 +14,17 @@ geopy==2.4.1
 arabic-reshaper
 python-bidi
 rich<14.0.0
+streamlit==1.36.0
+pandas==2.2.2
+sqlalchemy==2.0.30
+folium==0.16.0
+streamlit-folium==0.18.0
+jinja2==3.1.4
+fpdf==1.7.2
+plotly==5.22.0
+streamlit-aggrid==0.3.4.post3
+streamlit-authenticator==0.2.3
+python-multipart==0.0.9
+Pillow==10.3.0
+geopy==2.4.1
+numpy==1.26.4
