@@ -51,9 +51,8 @@ class PDFReport(FPDF):
         self.cell(0, 10, page_num, 0, 0, 'C')
     
     def add_arabic_content(self, text):
-        """إضافة نص عربي مع حل مشكلة المساحة الأفقية (Horizontal Space)"""
+        """إضافة نص عربي مع حل مشكلة المساحة الأفقية"""
         try:
-            # إضافة الخط مرة واحدة فقط لتجنب تعارض الذاكرة
             if 'DejaVu' not in self.fonts:
                 self.add_font('DejaVu', '', 'fonts/DejaVuSans.ttf')
             self.set_font('DejaVu', '', 12)
@@ -61,21 +60,17 @@ class PDFReport(FPDF):
             st.error("خطأ: ملف الخط غير موجود في fonts/DejaVuSans.ttf")
             return
             
-        # ضبط الهوامش لضمان توفر مساحة كافية
         self.set_right_margin(15)
         self.set_left_margin(15)
         left_margin = self.l_margin
         
-        # معالجة النص أسطر بأسطر لتجنب أخطاء المساحة
         for line in text.split('\n'):
             if not line.strip():
                 self.ln(5)
                 continue
             
             processed_line = fix_arabic(line)
-            # إعادة ضبط موقع X قبل كل خلية لضمان وجود مساحة كافية
             self.set_x(left_margin)
-            # استخدام w=0 يخبر المكتبة باستخدام كامل العرض المتاح تلقائياً
             self.multi_cell(w=0, h=10, txt=processed_line, align='R')
 
 def render_report_module(user_role):
@@ -87,7 +82,6 @@ def render_report_module(user_role):
     </div>
     """, unsafe_allow_html=True)
     
-    # تبويبات التقارير
     tab1, tab2, tab3, tab4 = st.tabs(["📊 تقارير التقييم", "📈 إحصائيات", "🎯 تقارير مخصصة", "📤 تصدير البيانات"])
     
     with tab1:
@@ -110,9 +104,9 @@ def render_evaluation_reports():
     with col1:
         st.selectbox("نوع التقرير", ["جميع التقارير", "معلقة", "مكتملة", "ملغاة"])
     with col2:
-        st.date_input("من تاريخ")
+        st.date_input("من تاريخ", key="eval_from")
     with col3:
-        st.date_input("إلى تاريخ")
+        st.date_input("إلى تاريخ", key="eval_to")
     
     reports = [
         {"id": "REP-2024-001", "property": "حي النخيل - الرياض", "value": "450,000 ر.س", "confidence": "92%", "status": "مكتمل", "date": "2024-01-15", "prepared_by": "المقيّم أحمد"},
@@ -142,7 +136,7 @@ def render_evaluation_reports():
                     st.warning(f"هل أنت متأكد من حذف التقرير {report['id']}?")
 
 def generate_pdf_report(report_data):
-    """توليد تقرير PDF مع إصلاح خطأ الترميز والمساحة"""
+    """توليد تقرير PDF وإصلاح مشاكل التنسيق"""
     pdf = PDFReport()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -170,11 +164,9 @@ def generate_pdf_report(report_data):
 التوقيع:
 _________________________
 مدير التقييم - نظام التقييم الإيجاري
-    """
+"""
     
     pdf.add_arabic_content(content)
-    
-    # الحل الجذري لـ latin-1: مكتبة fpdf2 تعيد bytes مباشرة عبر output()
     pdf_bytes = pdf.output()
     
     b64 = base64.b64encode(pdf_bytes).decode()
@@ -210,34 +202,41 @@ def render_statistics():
     
     st.markdown("---")
     c3, c4, c5, c6 = st.columns(4)
-    for col, (t, v, ch) in zip([c3, c4, c5, c6], [("🏢 إجمالي التقييمات", "1,245", "+12%"), ("⭐ متوسط الثقة", "87%", "+5%"), ("💰 متوسط القيمة", "425K", "+3%"), ("⏱️ متوسط وقت التقييم", "2.5 ساعة", "-15%")]):
-        with col: st.metric(t, v, ch)
+    metrics_data = [
+        ("🏢 إجمالي التقييمات", "1,245", "+12%"),
+        ("⭐ متوسط الثقة", "87%", "+5%"),
+        ("💰 متوسط القيمة", "425K", "+3%"),
+        ("⏱️ متوسط وقت التقييم", "2.5 ساعة", "-15%")
+    ]
+    for col, (t, v, ch) in zip([c3, c4, c5, c6], metrics_data):
+        with col:
+            st.metric(t, v, ch)
 
 def render_custom_reports():
-    """عرض التقارير المخصصة مع النماذج"""
+    """عرض التقارير المخصصة"""
     st.subheader("🎯 تقارير مخصصة حسب المعايير")
     with st.form("custom_report_form"):
         col1, col2 = st.columns(2)
         with col1:
-            report_period = st.selectbox("الفترة الزمنية", ["الأسبوع الحالي", "الشهر الحالي", "الربع الحالي", "السنة الحالية", "مخصص"])
-            property_types = st.multiselect("أنواع العقارات", ["سكني", "تجاري", "مكتبي", "صناعي", "زراعي"], default=["سكني", "تجاري"])
+            st.selectbox("الفترة الزمنية", ["الأسبوع الحالي", "الشهر الحالي", "الربع الحالي", "السنة الحالية", "مخصص"])
+            st.multiselect("أنواع العقارات", ["سكني", "تجاري", "مكتبي", "صناعي", "زراعي"], default=["سكني", "تجاري"])
         with col2:
-            cities = st.multiselect("المدن", ["الرياض", "جدة", "الدمام", "مكة", "المدينة", "الشرقية"], default=["الرياض", "جدة"])
-            min_confidence = st.slider("أقل درجة ثقة", 0, 100, 70)
+            st.multiselect("المدن", ["الرياض", "جدة", "الدمام", "مكة", "المدينة", "الشرقية"], default=["الرياض", "جدة"])
+            st.slider("أقل درجة ثقة", 0, 100, 70)
         
         st.markdown("---")
         c3, c4 = st.columns(2)
-        with c3: output_format = st.radio("صيغة الملف", ["PDF", "Excel", "CSV", "HTML"])
+        with c3:
+            st.radio("صيغة الملف", ["PDF", "Excel", "CSV", "HTML"])
         with c4: 
-            charts = st.checkbox("📊 تضمين الرسوم البيانية", value=True)
-            details = st.checkbox("📋 تضمين التفاصيل الكاملة", value=True)
+            st.checkbox("📊 تضمين الرسوم البيانية", value=True)
+            st.checkbox("📋 تضمين التفاصيل الكاملة", value=True)
             
         if st.form_submit_button("🚀 توليد التقرير", use_container_width=True):
             st.success("✅ تم توليد التقرير المخصص بنجاح!")
-            st.dataframe(pd.DataFrame({"المعيار": ["الفترة", "أنواع العقارات", "المدن"], "القيمة": [report_period, ", ".join(property_types), ", ".join(cities)]}), use_container_width=True)
 
 def render_export_options():
-    """عرض خيارات التصدير والجدولة"""
+    """عرض خيارات التصدير"""
     st.subheader("📤 تصدير البيانات والإحصائيات")
     col1, col2 = st.columns(2)
     with col1:
@@ -250,7 +249,9 @@ def render_export_options():
     st.markdown("---")
     st.subheader("🕐 تصدير مجدول")
     c3, c4 = st.columns(2)
-    with c3: st.selectbox("نوع الجدولة", ["يومي", "أسبوعي", "شهري"])
-    with c4: st.time_input("وقت التصدير")
+    with c3:
+        st.selectbox("نوع الجدولة", ["يومي", "أسبوعي", "شهري"])
+    with c4:
+        st.time_input("وقت التصدير")
     st.text_input("المستلمون (البريد الإلكتروني)")
     st.button("✅ تفعيل الجدولة", use_container_width=True)
