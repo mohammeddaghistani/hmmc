@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import plotly.express as px
+
 # الوحدات النمطية
 from modules.db import init_db, ensure_settings
 from modules.auth import login_required, logout
@@ -12,6 +12,7 @@ from modules.style import apply_custom_style, get_custom_css
 from modules.evaluation import render_evaluation_module
 from modules.report import render_report_module
 from modules.admin import render_admin_panel
+from modules.site_rental_value import SiteRentalValuation  # ⬅️ الجديد
 
 # تطبيق التصميم المخصص
 apply_custom_style()
@@ -23,6 +24,8 @@ if 'user_role' not in st.session_state:
     st.session_state.user_role = None
 if 'user_name' not in st.session_state:
     st.session_state.user_name = ""
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = "dashboard"
 
 def main():
     """الدالة الرئيسية للتطبيق"""
@@ -31,7 +34,7 @@ def main():
     st.markdown(get_custom_css(), unsafe_allow_html=True)
     
     # شريط العنوان مع الشعار
-    st.markdown("""
+    st.markdown(f"""
     <div class="main-header">
         <div class="header-content">
             <h1 class="app-title">🚀 نظام دعم قرار التقييم الإيجاري</h1>
@@ -39,10 +42,10 @@ def main():
         </div>
         <div class="header-status">
             <span class="status-badge">📍 الرياض، المملكة العربية السعودية</span>
-            <span class="status-badge">📅 {}</span>
+            <span class="status-badge">📅 {datetime.now().strftime("%Y-%m-%d")}</span>
         </div>
     </div>
-    """.format(datetime.now().strftime("%Y-%m-%d")), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
     
     # التحقق من المصادقة
     if not st.session_state.authenticated:
@@ -101,6 +104,9 @@ def render_main_application():
         render_dashboard(st.session_state.user_role)
     elif page == 'evaluation':
         render_evaluation_module(st.session_state.user_role)
+    elif page == 'site_rental':  # ⬅️ الصفحة الجديدة
+        rental_valuator = SiteRentalValuation()
+        rental_valuator.render_site_rental_module()
     elif page == 'reports':
         render_report_module(st.session_state.user_role)
     elif page == 'admin':
@@ -109,7 +115,7 @@ def render_main_application():
         render_profile_page()
 
 def render_navigation_bar():
-    """شريط التنقل العلوي"""
+    """شريط التنقل العلوي المحدث"""
     
     col1, col2, col3, col4, col5, col6 = st.columns([2, 1, 1, 1, 1, 1])
     
@@ -133,19 +139,18 @@ def render_navigation_bar():
             st.rerun()
     
     with col4:
+        if st.button("📍 القيمة الإيجارية", use_container_width=True):  # ⬅️ الزر الجديد
+            st.session_state.current_page = 'site_rental'
+            st.rerun()
+    
+    with col5:
         if st.button("📑 التقارير", use_container_width=True):
             st.session_state.current_page = 'reports'
             st.rerun()
     
-    with col5:
+    with col6:
         if st.button("⚙️ الإعدادات", use_container_width=True):
             st.session_state.current_page = 'profile'
-            st.rerun()
-    
-    with col6:
-        if st.button("🚪 تسجيل الخروج", use_container_width=True, type="secondary"):
-            logout()
-            st.session_state.authenticated = False
             st.rerun()
 
 def render_profile_page():
@@ -161,17 +166,16 @@ def render_profile_page():
     col1, col2 = st.columns([1, 2])
     
     with col1:
-        st.markdown("""
+        st.markdown(f"""
         <div class="profile-card">
             <div class="profile-avatar">
                 <span class="avatar-icon">👤</span>
             </div>
-            <h3>{}</h3>
-            <p class="role-badge">{}</p>
+            <h3>{st.session_state.user_name}</h3>
+            <p class="role-badge">{st.session_state.user_role.upper()}</p>
             <p class="profile-stats">📍 عضو منذ: يناير 2024</p>
         </div>
-        """.format(st.session_state.user_name, st.session_state.user_role.upper()), 
-        unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
     with col2:
         with st.container():
