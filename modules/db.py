@@ -1,10 +1,17 @@
 import sqlite3
 import json
+import os
 from datetime import datetime
 
+# التأكد من وجود مجلد البيانات لتجنب الأخطاء
+if not os.path.exists('data'):
+    os.makedirs('data')
+
+DB_PATH = 'data/system.db'
+
 def init_db():
-    """تهيئة قاعدة البيانات"""
-    conn = sqlite3.connect('data/system.db')
+    """تهيئة قاعدة البيانات وإنشاء الجداول"""
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     # جدول المستخدمين
@@ -25,10 +32,11 @@ def init_db():
     
     conn.commit()
     conn.close()
+    ensure_settings() # التأكد من وجود القيم الافتراضية بعد إنشاء الجدول
 
 def ensure_settings():
     """تأكيد وجود الإعدادات الأساسية"""
-    conn = sqlite3.connect('data/system.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     default_settings = [
@@ -36,7 +44,10 @@ def ensure_settings():
         ('version', '2.0.0'),
         ('default_language', 'ar'),
         ('currency', 'ريال سعودي'),
-        ('area_unit', 'متر مربع')
+        ('area_unit', 'متر مربع'),
+        ('mult_temp', '0.85'),
+        ('mult_long', '1.60'),
+        ('construction_cost_m2', '3500')
     ]
     
     for key, value in default_settings:
@@ -44,3 +55,32 @@ def ensure_settings():
     
     conn.commit()
     conn.close()
+
+# --- الدوال المطلوبة لعمل صفحة الإدارة (Admin Panel) ---
+
+def get_setting(key, default=None):
+    """جلب قيمة إعداد معين من قاعدة البيانات"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute('SELECT value FROM settings WHERE key = ?', (key,))
+        row = c.fetchone()
+        conn.close()
+        return row[0] if row else default
+    except Exception as e:
+        return default
+
+def update_setting(key, value):
+    """تحديث أو إضافة إعداد جديد"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        c.execute('''INSERT OR REPLACE INTO settings (key, value, updated_at) 
+                     VALUES (?, ?, ?)''', (key, str(value), now))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error updating setting: {e}")
+        return False
