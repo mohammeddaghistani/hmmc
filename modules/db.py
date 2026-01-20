@@ -1,63 +1,46 @@
 import sqlite3
-import pandas as pd
-import streamlit as st
 import json
+from datetime import datetime
 
 def init_db():
-    conn = sqlite3.connect('rental_evaluation.db')
-    cursor = conn.cursor()
-    # جدول الصفقات
-    cursor.execute('''CREATE TABLE IF NOT EXISTS deals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, property_type TEXT, location TEXT, area REAL, 
-        price REAL, deal_date DATE, latitude REAL, longitude REAL, activity_type TEXT, 
-        notes TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    """تهيئة قاعدة البيانات"""
+    conn = sqlite3.connect('data/system.db')
+    c = conn.cursor()
+    
+    # جدول المستخدمين
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT UNIQUE,
+                  password TEXT,
+                  name TEXT,
+                  email TEXT,
+                  role TEXT DEFAULT 'user',
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    
     # جدول الإعدادات
-    cursor.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
+    c.execute('''CREATE TABLE IF NOT EXISTS settings
+                 (key TEXT PRIMARY KEY,
+                  value TEXT,
+                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    
     conn.commit()
     conn.close()
 
 def ensure_settings():
-    """تثبيت كافة معدلات النظام في قاعدة البيانات للتحكم بها من الإدارة"""
-    conn = sqlite3.connect('rental_evaluation.db')
-    cursor = conn.cursor()
-    defaults = [
-        ('system_name', 'نظام التقييم الإيجاري البلدي'),
-        ('mult_temp', '0.85'), # معامل التأجير المؤقت
-        ('mult_long', '1.60'), # معامل الاستثمار طويل الأجل
-        ('mult_direct', '1.25'), # معامل التأجير المباشر
-        ('construction_cost_m2', '3500'),
-        ('default_discount_rate', '0.10')
+    """تأكيد وجود الإعدادات الأساسية"""
+    conn = sqlite3.connect('data/system.db')
+    c = conn.cursor()
+    
+    default_settings = [
+        ('system_name', 'نظام العقارات البلدية'),
+        ('version', '2.0.0'),
+        ('default_language', 'ar'),
+        ('currency', 'ريال سعودي'),
+        ('area_unit', 'متر مربع')
     ]
-    for key, value in defaults:
-        cursor.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', (key, value))
+    
+    for key, value in default_settings:
+        c.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', (key, value))
+    
     conn.commit()
     conn.close()
-
-def get_setting(key, default=None):
-    conn = sqlite3.connect('rental_evaluation.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT value FROM settings WHERE key = ?', (key,))
-    result = cursor.fetchone()
-    conn.close()
-    return result[0] if result else default
-
-def update_setting(key, value):
-    conn = sqlite3.connect('rental_evaluation.db')
-    cursor = conn.cursor()
-    cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, str(value)))
-    conn.commit()
-    conn.close()
-
-def add_deal(deal_data):
-    conn = sqlite3.connect('rental_evaluation.db')
-    cursor = conn.cursor()
-    cursor.execute('''INSERT INTO deals (property_type, location, area, price, deal_date, latitude, longitude, activity_type, notes) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
-                   (deal_data['property_type'], deal_data['location'], deal_data['area'], 
-                    deal_data['price'], deal_data['deal_date'], deal_data.get('latitude'), 
-                    deal_data.get('longitude'), deal_data['activity_type'], deal_data.get('notes', '')))
-    deal_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    st.cache_data.clear()
-    return deal_id
