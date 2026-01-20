@@ -7,6 +7,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
+import json
 from modules.valuation_methods import ValuationMethods
 
 class SiteRentalValuation:
@@ -20,7 +21,20 @@ class SiteRentalValuation:
             'industrial': 'موقع صناعي',
             'commercial': 'موقع تجاري',
             'agricultural': 'موقع زراعي',
-            'tourism': 'موقع سياحي'
+            'tourism': 'موقع سياحي',
+            'residential': 'موقع سكني',
+            'mixed_use': 'استخدام مختلط'
+        }
+        
+        self.services_list = {
+            'electricity': 'كهرباء',
+            'water': 'مياه',
+            'sewage': 'صرف صحي',
+            'roads': 'طرق معبدة',
+            'fencing': 'سور',
+            'lighting': 'إنارة',
+            'internet': 'إنترنت',
+            'security': 'حراسة'
         }
     
     def render_site_rental_module(self):
@@ -83,21 +97,19 @@ class SiteRentalValuation:
             with col2:
                 # الخدمات المتوفرة
                 st.subheader("⚡ الخدمات المتوفرة")
-                has_electricity = st.checkbox("كهرباء", value=True)
-                has_water = st.checkbox("مياه", value=True)
-                has_sewage = st.checkbox("صرف صحي", value=True)
-                has_roads = st.checkbox("طرق معبدة", value=True)
-                has_fencing = st.checkbox("سور", value=False)
+                services_selected = {}
+                for key, service in self.services_list.items():
+                    services_selected[key] = st.checkbox(service, value=(key in ['electricity', 'water', 'roads']))
                 
                 # التراخيص
                 st.subheader("📜 التراخيص والاستخدام")
                 zoning_type = st.selectbox(
                     "التصنيف البلدي",
-                    ["سكني", "تجاري", "صناعي", "زراعي", "سياحي", "مختلط"]
+                    ["سكني", "تجاري", "صناعي", "زراعي", "سياحي", "مختلط", "تعليمي", "صحي"]
                 )
                 allowed_uses = st.text_area(
                     "الاستخدامات المسموحة",
-                    placeholder="مثال: سكني عائلي، عمارة سكنية حتى 4 أدوار"
+                    placeholder="مثال: سكني عائلي، عمارة سكنية حتى 4 أدوار، مركز تجاري"
                 )
                 
                 # فترة التأجير المطلوبة
@@ -114,7 +126,8 @@ class SiteRentalValuation:
                     "مقارنة إيجارات مواقع مشابهة",
                     "القيمة المتبقية للتطوير",
                     "نسبة من قيمة الأرض",
-                    "طريقة الدخل (للمواقع التجارية)"
+                    "طريقة الدخل (للمواقع التجارية)",
+                    "طريقة التكلفة (للمواقع المبنية)"
                 ]
             )
             
@@ -126,6 +139,8 @@ class SiteRentalValuation:
                 self.render_percentage_of_value()
             elif method == "طريقة الدخل (للمواقع التجارية)":
                 self.render_income_method()
+            elif method == "طريقة التكلفة (للمواقع المبنية)":
+                self.render_cost_method()
             
             st.markdown("---")
             
@@ -142,13 +157,7 @@ class SiteRentalValuation:
                             'frontage': frontage_length,
                             'city': city,
                             'district': district,
-                            'services': {
-                                'electricity': has_electricity,
-                                'water': has_water,
-                                'sewage': has_sewage,
-                                'roads': has_roads,
-                                'fencing': has_fencing
-                            },
+                            'services': services_selected,
                             'zoning': zoning_type,
                             'allowed_uses': allowed_uses,
                             'lease_term': lease_term
@@ -183,8 +192,15 @@ class SiteRentalValuation:
                 
                 with col2:
                     frontage = st.number_input(f"📐 طول الواجهة (م)", value=20.0, key=f"front_{i}")
-                    services_count = st.slider(f"⚡ عدد الخدمات", 0, 5, 3, key=f"serv_{i}")
-                    location_score = st.slider(f"⭐ جودة الموقع", 1, 5, 3, key=f"loc_{i}")
+                    services_count = st.slider(f"⚡ عدد الخدمات", 0, 8, 3, key=f"serv_{i}")
+                    location_score = st.slider(f"⭐ جودة الموقع (1-5)", 1, 5, 3, key=f"loc_{i}")
+                
+                # إدخال إضافي
+                col3, col4 = st.columns(2)
+                with col3:
+                    year_rented = st.number_input(f"📅 سنة التأجير", min_value=2010, max_value=2024, value=2023, key=f"year_{i}")
+                with col4:
+                    lease_term = st.number_input(f"⏱️ فترة الإيجار (سنوات)", min_value=1, max_value=50, value=5, key=f"term_{i}")
                 
                 comparables.append({
                     'address': address,
@@ -192,7 +208,9 @@ class SiteRentalValuation:
                     'area': area,
                     'frontage': frontage,
                     'services_count': services_count,
-                    'location_score': location_score
+                    'location_score': location_score,
+                    'year_rented': year_rented,
+                    'lease_term': lease_term
                 })
         
         st.session_state.site_comparables = comparables
@@ -205,25 +223,50 @@ class SiteRentalValuation:
         col1, col2 = st.columns(2)
         
         with col1:
-            land_value = st.number_input("💎 القيمة السوقية للأرض (ريال)", value=1000000.0)
-            development_cost = st.number_input("🏗️ تكلفة التطوير (ريال)", value=500000.0)
+            st.subheader("💰 معلومات الأرض")
+            land_value = st.number_input("القيمة السوقية للأرض (ريال)", value=1000000.0)
+            land_area = st.number_input("مساحة الأرض (م²)", value=1000.0)
+            
+            st.subheader("🏗️ معلومات التطوير")
+            construction_cost_per_m2 = st.number_input("تكلفة البناء للمتر (ريال)", value=3000.0)
+            built_area = st.number_input("المساحة المبنية (م²)", value=800.0)
         
         with col2:
-            developer_profit = st.slider("📈 ربح المطور %", 10, 40, 20)
-            land_yield_rate = st.slider("🎯 معدل عائد الأرض %", 3, 15, 8)
+            st.subheader("📈 عوامل التكلفة")
+            professional_fees = st.slider("الرسوم المهنية %", 5, 20, 12)
+            marketing_cost = st.slider("تكاليف التسويق %", 2, 10, 5)
+            finance_cost = st.slider("تكاليف التمويل %", 3, 15, 8)
+            contingency = st.slider("مخصص الطوارئ %", 5, 15, 10)
+            
+            st.subheader("🎯 ربحية المشروع")
+            developer_profit = st.slider("ربح المطور %", 10, 40, 20)
+            land_yield_rate = st.slider("معدل عائد الأرض %", 3, 15, 8)
         
-        # عرض الحساب التقديري
-        total_value = land_value + development_cost
-        developer_amount = development_cost * (developer_profit / 100)
-        project_value = total_value + developer_amount
-        estimated_rent = land_value * (land_yield_rate / 100)
+        # الحساب التلقائي
+        construction_cost = built_area * construction_cost_per_m2
+        total_development_cost = construction_cost * (1 + professional_fees/100 + marketing_cost/100 + finance_cost/100 + contingency/100)
+        developer_profit_amount = total_development_cost * (developer_profit / 100)
+        
+        # حساب GDV (افتراضي)
+        estimated_gdv = total_development_cost + developer_profit_amount + land_value
+        
+        # حساب الإيجار
+        annual_ground_rent = land_value * (land_yield_rate / 100)
+        monthly_rent = annual_ground_rent / 12
+        rent_per_m2 = annual_ground_rent / land_area
         
         st.markdown("### 💰 الحساب التقديري")
         st.write(f"""
-        - **قيمة الأرض:** {land_value:,.0f} ريال
-        - **معدل العائد:** {land_yield_rate}%
-        - **الإيجار السنوي المقدر:** {estimated_rent:,.0f} ريال
-        - **الإيجار الشهري:** {estimated_rent / 12:,.0f} ريال
+        **ملخص التكاليف:**
+        - تكلفة البناء: {construction_cost:,.0f} ريال
+        - إجمالي تكاليف التطوير: {total_development_cost:,.0f} ريال
+        - ربح المطور: {developer_profit_amount:,.0f} ريال
+        - القيمة الإجمالية للمشروع: {estimated_gdv:,.0f} ريال
+        
+        **الإيجار المقترح:**
+        - القيمة الإيجارية السنوية: {annual_ground_rent:,.0f} ريال
+        - الإيجار الشهري: {monthly_rent:,.0f} ريال
+        - ريال/م²/سنة: {rent_per_m2:,.1f}
         """)
     
     def render_percentage_of_value(self):
@@ -234,18 +277,35 @@ class SiteRentalValuation:
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            land_value = st.number_input("قيمة الأرض السوقية (ريال)", value=1000000.0)
+            st.subheader("💰 قيمة الأرض")
+            land_value = st.number_input("القيمة السوقية للأرض (ريال)", value=1000000.0)
+            value_source = st.selectbox(
+                "مصدر القيمة",
+                ["تقييم حديث", "سجل العقاري", "مقارنة سوقية", "تقدير المقيم"]
+            )
         
         with col2:
+            st.subheader("📊 النسبة المئوية")
             percentage = st.slider("النسبة المئوية السنوية %", 1.0, 20.0, 8.0)
+            
+            st.info(f"""
+            **نطاق النسب المقترحة:**
+            - أراضي سكنية: 5-7%
+            - مواقع تجارية: 7-10%
+            - مواقع صناعية: 6-9%
+            - أراضي زراعية: 3-5%
+            """)
         
         with col3:
+            st.subheader("📐 المساحة")
             area = st.number_input("مساحة الأرض (م²)", value=1000.0)
+            usable_area = st.slider("النسبة القابلة للاستخدام %", 50, 100, 85)
         
         # حساب الإيجار
         annual_rent = land_value * (percentage / 100)
         monthly_rent = annual_rent / 12
         rent_per_m2 = annual_rent / area
+        effective_rent_per_m2 = annual_rent / (area * usable_area/100)
         
         st.markdown("### 📊 نتائج الحساب")
         
@@ -253,18 +313,21 @@ class SiteRentalValuation:
         
         with col_res1:
             st.metric("الإيجار السنوي", f"{annual_rent:,.0f} ريال")
+            st.caption(f"نسبة {percentage}% من القيمة")
         
         with col_res2:
             st.metric("الإيجار الشهري", f"{monthly_rent:,.0f} ريال")
+            st.caption("شهرياً")
         
         with col_res3:
             st.metric("ريال/م²/سنة", f"{rent_per_m2:,.1f}")
+            st.caption(f"فعلي: {effective_rent_per_m2:,.1f} مع نسبة استخدام {usable_area}%")
         
         st.info(f"""
         **تفسير النسبة {percentage}%:**
-        - نسبة متوسطة للأراضي: 5-8%
-        - نسبة مرتفعة للمواقع التجارية: 8-12%
-        - نسبة منخفضة للأراضي الزراعية: 3-5%
+        - هذه النسبة تعكس العائد المتوقع من استثمار الأرض
+        - تأخذ في الاعتبار المخاطر وفرص النمو في المنطقة
+        - تتوافق مع أسعار الفائدة السائدة في السوق
         """)
     
     def render_income_method(self):
@@ -272,36 +335,94 @@ class SiteRentalValuation:
         
         st.info("🏪 حساب الإيجار بناءً على الدخل المتوقع للمشروع")
         
-        col1, col2 = st.columns(2)
+        tab1, tab2, tab3 = st.tabs(["الإيرادات", "المصاريف", "التوقعات"])
         
-        with col1:
-            expected_revenue = st.number_input("الدخل السنوي المتوقع (ريال)", value=500000.0)
-            operating_expenses = st.slider("نسبة المصاريف التشغيلية %", 20, 80, 40)
-            profit_margin = st.slider("هامش الربح %", 10, 50, 25)
+        with tab1:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("💰 مصادر الإيرادات")
+                expected_revenue = st.number_input("الدخل السنوي المتوقع (ريال)", value=500000.0)
+                revenue_growth = st.slider("نمو الإيرادات السنوي %", 0, 20, 5)
+                seasonal_factor = st.slider("تذبذب موسمي %", 0, 50, 15)
+            
+            with col2:
+                st.subheader("📈 جودة الدخل")
+                revenue_stability = st.slider("استقرار الدخل (1-5)", 1, 5, 3,
+                    help="1: متقلب جداً, 5: مستقر تماماً")
+                payment_history = st.selectbox("سجل السداد",
+                    ["ممتاز", "جيد", "متوسط", "ضعيف", "غير معروف"])
         
-        with col2:
-            rental_to_revenue = st.slider("نسبة الإيجار من الدخل %", 5, 30, 15)
-            lease_term = st.slider("فترة الإيجار (سنوات)", 1, 20, 5)
-            rent_escalation = st.slider("زيادة إيجار سنوية %", 0, 10, 3)
+        with tab2:
+            col3, col4 = st.columns(2)
+            
+            with col3:
+                st.subheader("💸 المصاريف التشغيلية")
+                operating_expenses = st.slider("نسبة المصاريف التشغيلية %", 20, 80, 40)
+                fixed_costs = st.number_input("التكاليف الثابتة السنوية (ريال)", value=100000.0)
+                variable_costs_percent = st.slider("التكاليف المتغيرة % من الإيرادات", 10, 50, 25)
+            
+            with col4:
+                st.subheader("📊 الربحية")
+                target_profit_margin = st.slider("هامش الربح المستهدف %", 10, 50, 25)
+                industry_average = st.number_input("متوسط هامش القطاع %", value=30.0)
+                competitive_position = st.select_slider("الموقع التنافسي",
+                    options=["ضعيف", "متوسط", "جيد", "ممتاز"], value="جيد")
+        
+        with tab3:
+            col5, col6 = st.columns(2)
+            
+            with col5:
+                st.subheader("📅 شروط الإيجار")
+                rental_to_revenue = st.slider("نسبة الإيجار من الدخل %", 5, 30, 15)
+                lease_term = st.slider("فترة الإيجار (سنوات)", 1, 20, 5)
+                rent_escalation = st.slider("زيادة إيجار سنوية %", 0, 10, 3)
+            
+            with col6:
+                st.subheader("📊 عوامل المخاطرة")
+                business_risk = st.slider("مخاطر النشاط (1-5)", 1, 5, 3)
+                market_risk = st.slider("مخاطر السوق (1-5)", 1, 5, 3)
+                location_risk = st.slider("مخاطر الموقع (1-5)", 1, 5, 2)
         
         # الحسابات
         net_income = expected_revenue * (1 - operating_expenses/100)
-        profit = net_income * (profit_margin / 100)
-        available_for_rent = net_income - profit
+        variable_costs = expected_revenue * (variable_costs_percent / 100)
+        total_costs = fixed_costs + variable_costs
+        gross_profit = expected_revenue - total_costs
+        target_profit = expected_revenue * (target_profit_margin / 100)
+        available_for_rent = gross_profit - target_profit
         suggested_rent = available_for_rent * (rental_to_revenue / 100)
+        
+        # حساب عامل المخاطرة
+        total_risk = (business_risk + market_risk + location_risk) / 15  # طبيعي بين 0-1
+        risk_adjustment = 1 - (total_risk * 0.2)  # تخفيض يصل إلى 20%
+        adjusted_rent = suggested_rent * risk_adjustment
         
         st.markdown("### 💼 تحليل الدخل")
         
-        st.write(f"""
-        **الإيرادات والمصاريف:**
-        - الدخل المتوقع: {expected_revenue:,.0f} ريال
-        - المصاريف التشغيلية ({operating_expenses}%): {expected_revenue * operating_expenses/100:,.0f} ريال
-        - صافي الدخل: {net_income:,.0f} ريال
-        - هامش الربح ({profit_margin}%): {profit:,.0f} ريال
-        - المبلغ المتاح للإيجار: {available_for_rent:,.0f} ريال
-        """)
+        col_sum1, col_sum2 = st.columns(2)
         
-        st.metric("الإيجار المقترح", f"{suggested_rent:,.0f} ريال/سنة")
+        with col_sum1:
+            st.write(f"""
+            **الإيرادات والمصاريف:**
+            - الدخل المتوقع: {expected_revenue:,.0f} ريال
+            - المصاريف التشغيلية ({operating_expenses}%): {expected_revenue * operating_expenses/100:,.0f} ريال
+            - التكاليف الثابتة: {fixed_costs:,.0f} ريال
+            - التكاليف المتغيرة: {variable_costs:,.0f} ريال
+            - إجمالي التكاليف: {total_costs:,.0f} ريال
+            """)
+        
+        with col_sum2:
+            st.write(f"""
+            **الربحية:**
+            - الربح الإجمالي: {gross_profit:,.0f} ريال
+            - الربح المستهدف ({target_profit_margin}%): {target_profit:,.0f} ريال
+            - المبلغ المتاح للإيجار: {available_for_rent:,.0f} ريال
+            - عامل المخاطرة: {total_risk:.2f} (تخفيض {((1-risk_adjustment)*100):.1f}%)
+            """)
+        
+        st.metric("الإيجار المقترح", f"{adjusted_rent:,.0f} ريال/سنة")
+        st.caption(f"الأصل: {suggested_rent:,.0f} ريال | بعد تعديل المخاطرة: {adjusted_rent:,.0f} ريال")
         
         # جدول الزيادات السنوية
         if rent_escalation > 0:
@@ -309,16 +430,109 @@ class SiteRentalValuation:
             
             data = []
             for year in range(1, lease_term + 1):
-                annual_rent = suggested_rent * ((1 + rent_escalation/100) ** (year-1))
+                annual_rent = adjusted_rent * ((1 + rent_escalation/100) ** (year-1))
+                cumulative_increase = ((1 + rent_escalation/100) ** (year-1) - 1) * 100
                 data.append({
                     'السنة': year,
                     'الإيجار السنوي': f"{annual_rent:,.0f}",
                     'الإيجار الشهري': f"{annual_rent/12:,.0f}",
-                    'الزيادة': f"{rent_escalation if year > 1 else 0}%"
+                    'الزيادة السنوية': f"{rent_escalation if year > 1 else 0}%",
+                    'الزيادة التراكمية': f"{cumulative_increase:.1f}%"
                 })
             
             df = pd.DataFrame(data)
             st.dataframe(df, use_container_width=True)
+    
+    def render_cost_method(self):
+        """طريقة التكلفة للمواقع المبنية"""
+        
+        st.info("🏗️ حساب الإيجار بناءً على تكلفة الإنشاء والاستبدال")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("🏗️ تكاليف الإنشاء")
+            construction_cost_per_m2 = st.number_input("تكلفة البناء للمتر (ريال)", value=3000.0)
+            total_area = st.number_input("المساحة الإجمالية (م²)", value=1000.0)
+            construction_year = st.number_input("سنة البناء", min_value=1900, max_value=2024, value=2020)
+            
+            st.subheader("📉 الإهلاك")
+            useful_life = st.slider("العمر الإفتراضي (سنوات)", 10, 100, 50)
+            depreciation_method = st.selectbox("طريقة الإهلاك", ["خطي", "متناقص"])
+            salvage_value_percent = st.slider("قيمة الخردة %", 0, 50, 10)
+        
+        with col2:
+            st.subheader("🎯 العائد المطلوب")
+            required_return = st.slider("العائد المطلوب على الاستثمار %", 5, 20, 10)
+            operating_expenses_percent = st.slider("نسبة المصاريف التشغيلية %", 15, 40, 25)
+            vacancy_rate = st.slider("معدل الشغور %", 0, 30, 10)
+            
+            st.subheader("📊 عوامل الجودة")
+            construction_quality = st.slider("جودة البناء (1-5)", 1, 5, 3)
+            maintenance_level = st.slider("مستوى الصيانة (1-5)", 1, 5, 3)
+            functional_obsolescence = st.slider("تقادم وظيفي (1-5)", 1, 5, 2,
+                help="1: حديث تماماً, 5: قديم وغير عملي")
+        
+        # الحسابات
+        replacement_cost = construction_cost_per_m2 * total_area
+        
+        # حساب الإهلاك
+        age = 2024 - construction_year
+        if depreciation_method == "خطي":
+            annual_depreciation = replacement_cost / useful_life
+            accumulated_depreciation = annual_depreciation * age
+        else:  # متناقص
+            depreciation_rate = 2 / useful_life  # ضعف المعدل الخطي
+            accumulated_depreciation = replacement_cost * (1 - (1 - depreciation_rate) ** age)
+        
+        depreciated_value = max(replacement_cost - accumulated_depreciation, 
+                               replacement_cost * salvage_value_percent/100)
+        
+        # عوامل الجودة
+        quality_factor = (construction_quality + maintenance_level) / 10  # 0.2-1.0
+        obsolescence_factor = 1 - (functional_obsolescence / 10)  # 0.9-0.5
+        adjusted_value = depreciated_value * quality_factor * obsolescence_factor
+        
+        # حساب الإيجار
+        required_income = adjusted_value * (required_return / 100)
+        gross_required = required_income / (1 - operating_expenses_percent/100)
+        gross_required_adjusted = gross_required / (1 - vacancy_rate/100)
+        
+        annual_rent = gross_required_adjusted
+        monthly_rent = annual_rent / 12
+        rent_per_m2 = annual_rent / total_area
+        
+        st.markdown("### 🏗️ تحليل التكلفة")
+        
+        col_calc1, col_calc2 = st.columns(2)
+        
+        with col_calc1:
+            st.write(f"""
+            **تكاليف الإنشاء:**
+            - تكلفة الاستبدال: {replacement_cost:,.0f} ريال
+            - العمر: {age} سنة من {useful_life} سنة
+            - إهلاك متراكم: {accumulated_depreciation:,.0f} ريال
+            - القيمة بعد الإهلاك: {depreciated_value:,.0f} ريال
+            """)
+        
+        with col_calc2:
+            st.write(f"""
+            **تعديلات الجودة:**
+            - عامل الجودة: {quality_factor:.2f}
+            - عامل التقادم: {obsolescence_factor:.2f}
+            - القيمة المعدلة: {adjusted_value:,.0f} ريال
+            - العائد المطلوب ({required_return}%): {required_income:,.0f} ريال
+            """)
+        
+        st.metric("الإيجار السنوي المقترح", f"{annual_rent:,.0f} ريال")
+        st.caption(f"شهرياً: {monthly_rent:,.0f} ريال | للمتر: {rent_per_m2:,.1f} ريال/م²")
+        
+        st.info(f"""
+        **ملاحظات:**
+        - هذه الطريقة مناسبة للمباني الجديدة أو ذات القيمة الإنشائية العالية
+        - تأخذ في الاعتبار تكلفة استبدال المبنى حالياً
+        - تعكس قيمة الأرض والبناء معاً
+        """)
     
     def calculate_site_rental_value(self, site_data, method):
         """حساب القيمة الإيجارية للموقع"""
@@ -350,6 +564,12 @@ class SiteRentalValuation:
                     "2. حساب المصاريف التشغيلية",
                     "3. تحديد الربح التشغيلي",
                     "4. استخلاص الإيجار المناسب"
+                ],
+                "طريقة التكلفة (للمواقع المبنية)": [
+                    "1. حساب تكلفة الاستبدال",
+                    "2. تطبيق الإهلاك والاستهلاك",
+                    "3. تحديد القيمة الحالية",
+                    "4. حساب العائد المطلوب"
                 ]
             }
             
@@ -386,6 +606,8 @@ class SiteRentalValuation:
                 return self._calculate_by_percentage(site_data)
             elif method == "طريقة الدخل (للمواقع التجارية)":
                 return self._calculate_by_income(site_data)
+            elif method == "طريقة التكلفة (للمواقع المبنية)":
+                return self._calculate_by_cost(site_data)
         except Exception as e:
             st.error(f"❌ خطأ في الحساب: {str(e)}")
             return None
@@ -398,9 +620,33 @@ class SiteRentalValuation:
         if not comparables:
             # بيانات افتراضية للعرض
             comparables = [
-                {'rent_per_m2': 100, 'area': 1200, 'services_count': 3, 'location_score': 4},
-                {'rent_per_m2': 90, 'area': 1500, 'services_count': 2, 'location_score': 3},
-                {'rent_per_m2': 110, 'area': 1000, 'services_count': 4, 'location_score': 5}
+                {
+                    'rent_per_m2': 100, 
+                    'area': 1200, 
+                    'services_count': 3, 
+                    'location_score': 4,
+                    'frontage': 25,
+                    'year_rented': 2023,
+                    'lease_term': 5
+                },
+                {
+                    'rent_per_m2': 90, 
+                    'area': 1500, 
+                    'services_count': 2, 
+                    'location_score': 3,
+                    'frontage': 20,
+                    'year_rented': 2022,
+                    'lease_term': 3
+                },
+                {
+                    'rent_per_m2': 110, 
+                    'area': 1000, 
+                    'services_count': 4, 
+                    'location_score': 5,
+                    'frontage': 30,
+                    'year_rented': 2024,
+                    'lease_term': 10
+                }
             ]
         
         # حساب المتوسطات
@@ -431,6 +677,24 @@ class SiteRentalValuation:
             frontage_adj = min((site_frontage - avg_frontage) / avg_frontage * 0.1, 0.15)
             total_adjustment += frontage_adj
             adjustments.append(f"الواجهة: +{frontage_adj*100:.1f}%")
+        elif site_frontage < avg_frontage:
+            frontage_adj = max((site_frontage - avg_frontage) / avg_frontage * 0.1, -0.10)
+            total_adjustment += frontage_adj
+            adjustments.append(f"الواجهة: {frontage_adj*100:.1f}%")
+        
+        # تعديل جودة الموقع (افتراضي)
+        location_adj = 0.05  # +5% للموقع الجيد
+        total_adjustment += location_adj
+        adjustments.append(f"جودة الموقع: +{location_adj*100:.1f}%")
+        
+        # تعديل فترة الإيجار
+        avg_lease_term = np.mean([c.get('lease_term', 5) for c in comparables])
+        site_lease_term = site_data.get('lease_term', 5)
+        
+        if site_lease_term > avg_lease_term:
+            term_adj = min((site_lease_term - avg_lease_term) * 0.005, 0.10)
+            total_adjustment -= term_adj  # فترة أطول = خصم
+            adjustments.append(f"فترة الإيجار الطويلة: -{term_adj*100:.1f}%")
         
         # حساب القيمة النهائية
         adjusted_rent = base_rent * (1 + total_adjustment)
@@ -439,13 +703,15 @@ class SiteRentalValuation:
         
         return {
             'method': 'comparables',
-            'base_rent_per_m2': base_rent,
-            'adjusted_rent_per_m2': adjusted_rent,
-            'adjustment_percentage': total_adjustment * 100,
+            'base_rent_per_m2': round(base_rent, 2),
+            'adjusted_rent_per_m2': round(adjusted_rent, 2),
+            'adjustment_percentage': round(total_adjustment * 100, 2),
             'adjustments': adjustments,
-            'annual_rent': annual_rent,
-            'monthly_rent': monthly_rent,
-            'comparable_count': len(comparables)
+            'annual_rent': round(annual_rent, 2),
+            'monthly_rent': round(monthly_rent, 2),
+            'rent_per_m2': round(adjusted_rent, 2),
+            'comparable_count': len(comparables),
+            'confidence_score': min(0.95, 0.7 + (len(comparables) * 0.05))
         }
     
     def _calculate_by_residual(self, site_data):
@@ -462,10 +728,11 @@ class SiteRentalValuation:
         return {
             'method': 'residual',
             'land_value': land_value,
-            'yield_rate': land_yield_rate * 100,
-            'annual_rent': annual_rent,
-            'monthly_rent': monthly_rent,
-            'rent_per_m2': rent_per_m2
+            'yield_rate': round(land_yield_rate * 100, 2),
+            'annual_rent': round(annual_rent, 2),
+            'monthly_rent': round(monthly_rent, 2),
+            'rent_per_m2': round(rent_per_m2, 2),
+            'confidence_score': 0.75
         }
     
     def _calculate_by_percentage(self, site_data):
@@ -483,9 +750,10 @@ class SiteRentalValuation:
             'method': 'percentage',
             'land_value': land_value,
             'percentage': percentage,
-            'annual_rent': annual_rent,
-            'monthly_rent': monthly_rent,
-            'rent_per_m2': rent_per_m2
+            'annual_rent': round(annual_rent, 2),
+            'monthly_rent': round(monthly_rent, 2),
+            'rent_per_m2': round(rent_per_m2, 2),
+            'confidence_score': 0.80
         }
     
     def _calculate_by_income(self, site_data):
@@ -503,9 +771,33 @@ class SiteRentalValuation:
             'method': 'income',
             'expected_revenue': expected_revenue,
             'rental_to_revenue': rental_to_revenue,
-            'annual_rent': suggested_rent,
-            'monthly_rent': monthly_rent,
-            'rent_per_m2': rent_per_m2
+            'annual_rent': round(suggested_rent, 2),
+            'monthly_rent': round(monthly_rent, 2),
+            'rent_per_m2': round(rent_per_m2, 2),
+            'confidence_score': 0.70
+        }
+    
+    def _calculate_by_cost(self, site_data):
+        """الحساب بطريقة التكلفة"""
+        
+        # قيم افتراضية
+        construction_cost_per_m2 = 3000
+        total_area = site_data['area']
+        replacement_cost = construction_cost_per_m2 * total_area
+        required_return = 0.10  # 10%
+        
+        annual_rent = replacement_cost * required_return
+        monthly_rent = annual_rent / 12
+        rent_per_m2 = annual_rent / total_area
+        
+        return {
+            'method': 'cost',
+            'replacement_cost': round(replacement_cost, 2),
+            'required_return': round(required_return * 100, 2),
+            'annual_rent': round(annual_rent, 2),
+            'monthly_rent': round(monthly_rent, 2),
+            'rent_per_m2': round(rent_per_m2, 2),
+            'confidence_score': 0.65
         }
     
     def display_site_rental_results(self, results, site_data):
@@ -532,6 +824,8 @@ class SiteRentalValuation:
         with col4:
             if 'adjustment_percentage' in results:
                 st.metric("⚖️ إجمالي التعديل", f"{results['adjustment_percentage']:+.1f}%")
+            elif 'confidence_score' in results:
+                st.metric("⭐ درجة الثقة", f"{results['confidence_score']*100:.0f}%")
             else:
                 st.metric("📍 مساحة الموقع", f"{site_data['area']:,.0f} م²")
         
@@ -546,21 +840,28 @@ class SiteRentalValuation:
             self._display_percentage_details(results)
         elif results['method'] == 'income':
             self._display_income_details(results)
+        elif results['method'] == 'cost':
+            self._display_cost_details(results)
         
         # خيارات إضافية
         st.markdown("---")
         
-        col_opt1, col_opt2, col_opt3 = st.columns(3)
+        col_opt1, col_opt2, col_opt3, col_opt4 = st.columns(4)
         
         with col_opt1:
             if st.button("📄 إنشاء عقد إيجار", use_container_width=True):
                 self.generate_lease_agreement(results, site_data)
         
         with col_opt2:
-            if st.button("💾 حفظ التقييم", use_container_width=True):
-                st.success("✅ تم حفظ التقييم الإيجاري")
+            if st.button("📊 تحليل تفصيلي", use_container_width=True):
+                self.show_detailed_analysis(results, site_data)
         
         with col_opt3:
+            if st.button("💾 حفظ التقييم", use_container_width=True):
+                self.save_site_valuation(results, site_data)
+                st.success("✅ تم حفظ التقييم الإيجاري")
+        
+        with col_opt4:
             if st.button("🔄 تقييم جديد", use_container_width=True):
                 st.rerun()
     
@@ -574,12 +875,30 @@ class SiteRentalValuation:
         - عدد المواقع المقارنة: {results.get('comparable_count', 0)}
         - متوسط الإيجار الأساسي: {results.get('base_rent_per_m2', 0):,.1f} ريال/م²
         - الإيجار المعدل: {results.get('adjusted_rent_per_m2', 0):,.1f} ريال/م²
+        - درجة الثقة: {results.get('confidence_score', 0)*100:.0f}%
         """)
         
         if results.get('adjustments'):
             st.write("**التعديلات المطبقة:**")
             for adj in results['adjustments']:
                 st.write(f"• {adj}")
+        
+        # عرض توصيات إضافية
+        st.subheader("🎯 توصيات الإيجار")
+        
+        col_rec1, col_rec2 = st.columns(2)
+        
+        with col_rec1:
+            st.write("**للمالك:**")
+            st.write("• ضع سعراً بين ±5% من القيمة المقترحة")
+            st.write("• ضع في الاعتبار فترة الإيجار الطويلة")
+            st.write("• فكر في زيادة سنوية بنسبة 3-5%")
+        
+        with col_rec2:
+            st.write("**للمستأجر:**")
+            st.write("• تفاوض على فترة سماح للسداد")
+            st.write("• اطلب تحديد مسؤوليات الصيانة")
+            st.write("• تأكد من شروط التجديد")
     
     def _display_residual_details(self, results):
         """عرض تفاصيل طريقة القيمة المتبقية"""
@@ -598,6 +917,13 @@ class SiteRentalValuation:
         - = {results.get('land_value', 0):,.0f} × {results.get('yield_rate', 0)/100:.3f}
         - = **{results.get('annual_rent', 0):,.0f} ريال**
         """)
+        
+        st.info(f"""
+        **تفسير معدل العائد {results.get('yield_rate', 0):.1f}%:**
+        - يعكس العائد المتوقع من استثمار الأرض
+        - يأخذ في الاعتبار المخاطر وفرص النمو
+        - يتناسب مع أسعار الفائدة السائدة
+        """)
     
     def _display_percentage_details(self, results):
         """عرض تفاصيل طريقة النسبة"""
@@ -608,6 +934,13 @@ class SiteRentalValuation:
         **المدخلات:**
         - قيمة الأرض: {results.get('land_value', 0):,.0f} ريال
         - النسبة المئوية: {results.get('percentage', 0):.1f}%
+        """)
+        
+        st.write(f"""
+        **الحساب:**
+        - الإيجار السنوي = قيمة الأرض × النسبة المئوية
+        - = {results.get('land_value', 0):,.0f} × {results.get('percentage', 0)/100:.3f}
+        - = **{results.get('annual_rent', 0):,.0f} ريال**
         """)
         
         st.info(f"""
@@ -635,261 +968,162 @@ class SiteRentalValuation:
         - = {results.get('expected_revenue', 0):,.0f} × {results.get('rental_to_revenue', 0)/100:.3f}
         - = **{results.get('annual_rent', 0):,.0f} ريال**
         """)
+        
+        st.info(f"""
+        **تفسير نسبة الإيجار {results.get('rental_to_revenue', 0):.1f}%:**
+        - نسب متوسطة للمطاعم: 8-12%
+        - نسب للمحلات التجارية: 10-15%
+        - نسب للمكاتب: 15-20%
+        - نسب للمراكز التجارية: 12-18%
+        """)
+    
+    def _display_cost_details(self, results):
+        """عرض تفاصيل طريقة التكلفة"""
+        
+        st.subheader("🏗️ تفاصيل طريقة التكلفة")
+        
+        st.write(f"""
+        **المدخلات:**
+        - تكلفة الاستبدال: {results.get('replacement_cost', 0):,.0f} ريال
+        - العائد المطلوب: {results.get('required_return', 0):.1f}%
+        """)
+        
+        st.write(f"""
+        **الحساب:**
+        - الإيجار السنوي = تكلفة الاستبدال × العائد المطلوب
+        - = {results.get('replacement_cost', 0):,.0f} × {results.get('required_return', 0)/100:.3f}
+        - = **{results.get('annual_rent', 0):,.0f} ريال**
+        """)
+        
+        st.info(f"""
+        **ملاحظات:**
+        - هذه الطريقة مناسبة للمباني الجديدة
+        - تأخذ في الاعتبار تكلفة إعادة الإنشاء
+        - تعكس القيمة الاقتصادية الحقيقية
+        """)
+    
+    def show_detailed_analysis(self, results, site_data):
+        """عرض تحليل تفصيلي"""
+        
+        st.subheader("📊 تحليل تفصيلي للقيمة الإيجارية")
+        
+        # تحليل السوق
+        st.markdown("### 📈 تحليل السوق الإيجاري")
+        
+        market_data = {
+            'المؤشر': ['متوسط السوق', 'أعلى سعر', 'أقل سعر', 'العرض المتاح'],
+            'القيمة': [
+                f"{results.get('rent_per_m2', 0)*0.9:,.1f}-{results.get('rent_per_m2', 0)*1.1:,.1f} ريال/م²",
+                f"{results.get('rent_per_m2', 0)*1.3:,.1f} ريال/م²",
+                f"{results.get('rent_per_m2', 0)*0.7:,.1f} ريال/م²",
+                "15-20 موقع مماثل"
+            ]
+        }
+        
+        st.table(pd.DataFrame(market_data))
+        
+        # توصيات التسعير
+        st.markdown("### 🎯 استراتيجيات التسعير")
+        
+        col_strat1, col_strat2 = st.columns(2)
+        
+        with col_strat1:
+            st.write("**للاستئجار السريع:**")
+            st.write(f"- السعر: {results.get('rent_per_m2', 0)*0.95:,.1f} ريال/م²")
+            st.write(f"- السنوي: {results.get('annual_rent', 0)*0.95:,.0f} ريال")
+            st.write("- المزايا: جذب مستأجرين سريعاً")
+        
+        with col_strat2:
+            st.write("**للاستثمار طويل الأجل:**")
+            st.write(f"- السعر: {results.get('rent_per_m2', 0)*1.05:,.1f} ريال/م²")
+            st.write(f"- السنوي: {results.get('annual_rent', 0)*1.05:,.0f} ريال")
+            st.write("- المزايا: عائد أعلى واستقرار")
+        
+        # تحليل المخاطر
+        st.markdown("### ⚠️ تحليل المخاطر")
+        
+        risks = [
+            {"المخاطر": "تقلبات السوق", "التأثير": "متوسط", "التخفيف": "عقد طويل الأجل"},
+            {"المخاطر": "تغير السياسات", "التأثير": "منخفض", "التخفيف": "مراجعة دورية"},
+            {"المخاطر": "صعوبة السداد", "التأثير": "مرتفع", "التخفيف": "كفالة شهرين"},
+            {"المخاطر": "تلف الممتلكات", "التأثير": "متوسط", "التخفيف": "تأمين شامل"}
+        ]
+        
+        st.table(pd.DataFrame(risks))
     
     def generate_lease_agreement(self, results, site_data):
         """توليد نموذج عقد إيجار"""
         
         st.info("📝 جاري إنشاء نموذج عقد إيجار...")
         
+        # حساب القيم المختلفة
+        annual_rent = results.get('annual_rent', 0)
+        monthly_rent = results.get('monthly_rent', 0)
+        security_deposit = monthly_rent * 2  # كفالة شهرين
+        
         agreement_template = f"""
         # عقد إيجار موقع
         
+        **رقم العقد:** LEASE-{datetime.now().strftime('%Y%m%d%H%M')}
         **تاريخ العقد:** {datetime.now().strftime('%Y-%m-%d')}
         
         ## ١. أطراف العقد
-        - **المؤجر:** [اسم المؤجر]
-        - **المستأجر:** [اسم المستأجر]
+        - **المؤجر (الطرف الأول):** [اسم المؤجر]
+          - الهوية/السجل التجاري: [رقم الهوية/السجل]
+          - العنوان: [عنوان المؤجر]
+          - الهاتف: [هاتف المؤجر]
+          - البريد الإلكتروني: [بريد المؤجر]
+        
+        - **المستأجر (الطرف الثاني):** [اسم المستأجر]
+          - الهوية/السجل التجاري: [رقم الهوية/السجل]
+          - العنوان: [عنوان المستأجر]
+          - الهاتف: [هاتف المستأجر]
+          - البريد الإلكتروني: [بريد المستأجر]
         
         ## ٢. وصف الموقع المؤجر
-        - **الموقع:** {site_data.get('name', 'غير محدد')}
-        - **المدينة:** {site_data.get('city', '')}
-        - **الحي:** {site_data.get('district', '')}
-        - **المساحة:** {site_data.get('area', 0):,.0f} م²
-        - **طول الواجهة:** {site_data.get('frontage', 0):,.1f} م
-        - **الخدمات المتوفرة:** {', '.join([k for k, v in site_data.get('services', {}).items() if v])}
+        - **اسم الموقع:** {site_data.get('name', 'غير محدد')}
+        - **الموقع:** {site_data.get('city', '')} - {site_data.get('district', '')}
+        - **المساحة:** {site_data.get('area', 0):,.0f} متر مربع
+        - **طول الواجهة:** {site_data.get('frontage', 0):,.1f} متر
+        - **الخدمات المتوفرة:** {', '.join([self.services_list[k] for k, v in site_data.get('services', {}).items() if v])}
+        - **التصنيف البلدي:** {site_data.get('zoning', 'غير محدد')}
+        - **الاستخدامات المسموحة:** {site_data.get('allowed_uses', 'حسب التصنيف البلدي')}
         
         ## ٣. بنود الإيجار
         - **مدة العقد:** {site_data.get('lease_term', 5)} سنوات
-        - **قيمة الإيجار السنوية:** {results.get('annual_rent', 0):,.0f} ريال سعودي
-        - **قيمة الإيجار الشهرية:** {results.get('monthly_rent', 0):,.0f} ريال سعودي
-        - **طريقة السداد:** [شهري/ربع سنوي/سنوي]
-        - **زيادة الإيجار:** [نسبة ونظام الزيادة]
+        - **تاريخ بداية الإيجار:** [تاريخ البداية]
+        - **تاريخ نهاية الإيجار:** [تاريخ النهاية]
+        - **قيمة الإيجار السنوية:** {annual_rent:,.0f} ريال سعودي
+        - **قيمة الإيجار الشهرية:** {monthly_rent:,.0f} ريال سعودي
+        - **الكفالة:** {security_deposit:,.0f} ريال سعودي (شهرين إيجار)
+        - **طريقة السداد:** [شهري/ربع سنوي/سنوي] في أول كل [فترة]
+        - **زيادة الإيجار:** 3% سنوياً أو حسب اتفاق الطرفين
         
         ## ٤. الغرض من الاستخدام
+        يُستخدم الموقع المؤجر للأغراض التالية فقط:
         {site_data.get('allowed_uses', 'حسب التصنيف البلدي')}
         
         ## ٥. التزامات الأطراف
-        - **التزامات المؤجر:** [توفير الخدمات، الصيانة الدورية، إلخ]
-        - **التزامات المستأجر:** [الاستخدام حسب الغرض، الصيانة اليومية، دفع الإيجار في وقت محدد]
         
-        ## ٦. التوقيعات
-        _________________________
-        **توقيع المؤجر**
+        **أ. التزامات المؤجر:**
+        1. تسليم الموقع للمستأجر في الحالة المتفق عليها
+        2. صيانة الهيكل الإنشائي والأنظمة الرئيسية
+        3. توفير الخدمات الأساسية (كهرباء، مياه، صرف صحي)
+        4. عدم التعرض لحق المستأجر في الانتفاع بالمؤجر خلال مدة العقد
         
-        _________________________
-        **توقيع المستأجر**
+        **ب. التزامات المستأجر:**
+        1. دفع الإيجار في موعده المحدد
+        2. صيانة الموقع والمحافظة عليه
+        3. استخدام الموقع للغرض المتفق عليه فقط
+        4. عدم إجراء تعديلات دون موافقة كتابية من المؤجر
+        5. إعادة الموقع في نهاية العقد كما كان عند التسليم
         
-        **ملاحظة:** هذا نموذج أولي ويجب مراجعته من قبل مستشار قانوني.
-        """
+        ## ٦. شروط التجديد والفسخ
         
-        st.text_area("📄 نموذج عقد الإيجار", agreement_template, height=400)
+        **أ. التجديد:**
+        - للمستأجر الحق في تجديد العقد لفترة مماثلة بشروط تتوافق مع سوق الإيجار وقت التجديد
+        - يجب إخطار المؤجر برغبة التجديد قبل 90 يوم من انتهاء العقد
         
-        st.download_button(
-            label="📥 تحميل العقد",
-            data=agreement_template,
-            file_name=f"عقد_إيجار_{site_data.get('name', 'موقع')}.txt",
-            mime="text/plain"
-        )
-    
-    def render_rental_map(self):
-        """عرض خريطة الإيجارات"""
-        
-        st.subheader("🗺️ خريطة الإيجارات في المنطقة")
-        
-        # محاكاة خريطة (في الواقع ستكون خريقة تفاعلية)
-        st.info("📍 هذه مساحة لعرض خريطة تفاعلية للإيجارات في المنطقة")
-        
-        # بيانات وهمية للإيجارات
-        rentals_data = [
-            {"location": "حي النخيل", "type": "أرض سكنية", "rent_per_m2": 120, "area": 1500},
-            {"location": "حي الياسمين", "type": "موقع تجاري", "rent_per_m2": 180, "area": 800},
-            {"location": "حي الربيع", "type": "أرض صناعية", "rent_per_m2": 90, "area": 2500},
-            {"location": "حي العليا", "type": "موقع تجاري", "rent_per_m2": 220, "area": 600},
-            {"location": "حي السفارات", "type": "أرض سكنية", "rent_per_m2": 150, "area": 1200}
-        ]
-        
-        df = pd.DataFrame(rentals_data)
-        st.dataframe(df, use_container_width=True)
-        
-        # إحصائيات
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            avg_rent = df['rent_per_m2'].mean()
-            st.metric("متوسط ريال/م²", f"{avg_rent:.1f}")
-        
-        with col2:
-            total_area = df['area'].sum()
-            st.metric("إجمالي المساحة", f"{total_area:,.0f} م²")
-        
-        with col3:
-            st.metric("عدد المواقع", len(df))
-    
-    def render_area_analysis(self):
-        """تحليل المنطقة"""
-        
-        st.subheader("📊 تحليل المنطقة والأسعار")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("### 📈 اتجاهات الأسعار")
-            st.line_chart(pd.DataFrame({
-                'الشهر': ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو'],
-                'ريال/م²': [110, 115, 118, 120, 122]
-            }).set_index('الشهر'))
-        
-        with col2:
-            st.markdown("### 🏘️ توزيع المواقع حسب النوع")
-            st.bar_chart(pd.DataFrame({
-                'النوع': ['سكني', 'تجاري', 'صناعي', 'زراعي'],
-                'العدد': [15, 8, 6, 3]
-            }).set_index('النوع'))
-        
-        st.markdown("### 📋 تقرير تحليل المنطقة")
-        st.write("""
-        **الملاحظات الرئيسية:**
-        1. **اتجاهات السوق:** ارتفاع تدريجي في أسعار الإيجار بنسبة 2-3% ربع سنوي
-        2. **العرض والطلب:** زيادة الطلب على المواقع التجارية في الأحياء الجديدة
-        3. **التوصيات:** 
-           - التفاوض على عقود طويلة الأجل لضمان الاستقرار
-           - مراعاة زيادة سنوية للإيجار بنسبة 3-5%
-           - دراسة إمكانية تجزئة المواقع الكبيرة
-        """)
-    
-    def render_rental_reports(self):
-        """عرض تقارير الإيجار"""
-        
-        st.subheader("📑 تقارير القيمة الإيجارية")
-        
-        if 'last_site_valuation' in st.session_state:
-            valuation = st.session_state.last_site_valuation
-            
-            with st.expander("📋 عرض آخر تقييم إيجاري", expanded=True):
-                st.write(f"**الموقع:** {valuation['site_data'].get('name', 'غير محدد')}")
-                st.write(f"**المنهجية:** {valuation['method']}")
-                st.write(f"**التاريخ:** {valuation['timestamp'].strftime('%Y-%m-%d %H:%M')}")
-                
-                results = valuation['results']
-                st.write(f"**الإيجار السنوي:** {results.get('annual_rent', 0):,.0f} ريال")
-                st.write(f"**الإيجار الشهري:** {results.get('monthly_rent', 0):,.0f} ريال")
-            
-            col_rep1, col_rep2, col_rep3 = st.columns(3)
-            
-            with col_rep1:
-                if st.button("📄 تقرير مفصل", use_container_width=True):
-                    self.generate_detailed_rental_report(valuation)
-            
-            with col_rep2:
-                if st.button("📊 تحليل السوق", use_container_width=True):
-                    self.generate_market_analysis_report(valuation)
-            
-            with col_rep3:
-                if st.button("💼 نموذج عقد", use_container_width=True):
-                    self.generate_lease_agreement(
-                        valuation['results'], 
-                        valuation['site_data']
-                    )
-        
-        else:
-            st.info("📭 لم يتم إجراء أي تقييم إيجاري بعد. قم بتقييم موقع أولاً.")
-    
-    def generate_detailed_rental_report(self, valuation):
-        """توليد تقرير إيجاري مفصل"""
-        
-        report = f"""
-        # تقرير تحديد القيمة الإيجارية للموقع
-        
-        ## ١. معلومات التقرير
-        - **رقم التقرير:** RENT-{datetime.now().strftime('%Y%m%d%H%M')}
-        - **تاريخ التقييم:** {valuation['timestamp'].strftime('%Y-%m-%d')}
-        - **الغرض:** تحديد القيمة الإيجارية للموقع
-        
-        ## ٢. معلومات الموقع
-        - **اسم الموقع:** {valuation['site_data'].get('name', 'غير محدد')}
-        - **الموقع:** {valuation['site_data'].get('city', '')} - {valuation['site_data'].get('district', '')}
-        - **المساحة:** {valuation['site_data'].get('area', 0):,.0f} م²
-        - **نوع الموقع:** {valuation['site_data'].get('type', 'غير محدد')}
-        - **فترة الإيجار المقترحة:** {valuation['site_data'].get('lease_term', 5)} سنوات
-        
-        ## ٣. منهجية التقييم
-        - **الطريقة المستخدمة:** {valuation['method']}
-        - **نطاق العمل:** تقييم القيمة الإيجارية العادلة للموقع
-        
-        ## ٤. نتائج التقييم
-        - **القيمة الإيجارية السنوية:** {valuation['results'].get('annual_rent', 0):,.0f} ريال
-        - **القيمة الإيجارية الشهرية:** {valuation['results'].get('monthly_rent', 0):,.0f} ريال
-        """
-        
-        if 'rent_per_m2' in valuation['results']:
-            report += f"- **القيمة للمتر المربع:** {valuation['results']['rent_per_m2']:,.1f} ريال/م²/سنة\n"
-        
-        report += """
-        
-        ## ٥. الافتراضات الأساسية
-        1. استقرار ظروف السوق العقاري
-        2. توفر الخدمات الأساسية كما هو مذكور
-        3. صلاحية الموقع للاستخدام المطلوب
-        4. عدم وجود قيود قانونية تمنع التأجير
-        
-        ## ٦. التوصيات
-        1. مراجعة العقد مع مستشار قانوني
-        2. تضمين بند زيادات سنوية (3-5%)
-        3. تحديد فترة سماح للدفع (15 يوم)
-        4. توثيق حالة الموقع قبل التسليم
-        
-        ## ٧. إخلاء المسؤولية
-        هذا التقرير لأغراض التقييم الأولي ويجب عدم اعتباره نصيحة قانونية أو مالية نهائية.
-        """
-        
-        st.text_area("📄 التقرير الكامل", report, height=500)
-        
-        st.download_button(
-            label="📥 تحميل التقرير",
-            data=report,
-            file_name=f"تقرير_إيجاري_{valuation['site_data'].get('name', 'موقع')}.txt",
-            mime="text/plain"
-        )
-    
-    def generate_market_analysis_report(self, valuation):
-        """توليد تقرير تحليل السوق"""
-        
-        analysis = f"""
-        # تقرير تحليل سوق الإيجارات للمواقع
-        
-        ## ١. نظرة عامة على السوق
-        **الموقع:** {valuation['site_data'].get('city', '')}
-        **الفترة:** الربع الأول 2024
-        
-        ## ٢. اتجاهات الأسعار
-        - **متوسط أسعار الإيجار للمواقع المشابهة:** 110-150 ريال/م²/سنة
-        - **نمو الأسعار السنوي:** 3-5%
-        - **العرض والطلب:** توازن مع ميل طفيف لصالح العرض
-        
-        ## ٣. عوامل التأثير
-        1. **العوامل الإيجابية:**
-           - نمو المشاريع التنموية في المنطقة
-           - تحسين البنية التحتية
-           - زيادة الاستثمارات
-        
-        2. **العوامل السلبية:**
-           - تقلبات أسعار المواد
-           - تغيرات السياسات العقارية
-           - المنافسة من المناطق الجديدة
-        
-        ## ٤. توصيات التسعير
-        - **السعر المقترح:** {valuation['results'].get('annual_rent', 0):,.0f} ريال/سنة
-        - **نطاق التسعير المقبول:** ±10% من السعر المقترح
-        - **فترة التفاوض:** 30-60 يوم
-        
-        ## ٥. استراتيجية التأجير
-        1. **للإيجار قصير الأجل (1-3 سنوات):**
-           - زيادة السعر بنسبة 10-15%
-           - طلب كفالة أكبر
-        
-        2. **للإيجار طويل الأجل (5+ سنوات):**
-           - خصم 5-10% للالتزام الطويل
-           - تضمين زيادات سنوية محددة مسبقاً
-        """
-        
-        st.text_area("📊 تحليل السوق", analysis, height=400)
+        **ب. الفسخ:**
+        1. للمؤجر فسخ العقد في حال تأخر المستأجر عن دفع الإيجار لمدة 30 يوم
+        2. للمستأجر فسخ العقد بموافقة المؤجر أو بدفع تعويض قدره [مبلغ التعويض]
