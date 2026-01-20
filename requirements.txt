@@ -14,3 +14,9 @@ geopy==2.4.1
 arabic-reshaper
 python-bidi
 numpy==1.26.4
+streamlit-option-menu==0.3.9
+pip install streamlit-option-menu
+streamlit
+pandas
+plotly
+streamlit-option-menu
