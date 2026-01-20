@@ -1,82 +1,69 @@
-import streamlit as st
 import hashlib
-import time
-
-# قاعدة بيانات المستخدمين (في بيئة حقيقية تستخدم قاعدة بيانات)
-USERS = {
-    "admin": {
-        "password": "admin123",  # في بيئة حقيقية تستخدم التجزئة
-        "role": "admin",
-        "name": "المسؤول العام"
-    },
-    "committee": {
-        "password": "committee123",
-        "role": "committee",
-        "name": "لجنة المراجعة"
-    },
-    "valuer": {
-        "password": "valuer123",
-        "role": "valuer",
-        "name": "المقيّم العقاري"
-    },
-    "dataentry": {
-        "password": "data123",
-        "role": "dataentry",
-        "name": "مدخل البيانات"
-    }
-}
+import sqlite3
+from datetime import datetime
 
 def hash_password(password):
-    """تجزئة كلمة المرور"""
+    """تشفير كلمة المرور"""
     return hashlib.sha256(password.encode()).hexdigest()
 
-def authenticate(username, password):
-    """المصادقة على المستخدم"""
-    if username in USERS:
-        # في بيئة حقيقية تقارن كلمات المرور المشفرة
-        if USERS[username]["password"] == password:
-            return {
-                "username": username,
-                "role": USERS[username]["role"],
-                "name": USERS[username]["name"]
-            }
+def login_required(username, password):
+    """المصادقة"""
+    conn = sqlite3.connect('data/system.db')
+    c = conn.cursor()
+    
+    hashed_password = hash_password(password)
+    
+    c.execute('SELECT * FROM users WHERE username = ? AND password = ?', 
+              (username, hashed_password))
+    user = c.fetchone()
+    
+    conn.close()
+    
+    if user:
+        return {
+            'id': user[0],
+            'username': user[1],
+            'name': user[3],
+            'email': user[4],
+            'role': user[5]
+        }
     return None
 
-def login_required(username=None, password=None):
-    """التحقق من تسجيل الدخول"""
-    if username and password:
-        return authenticate(username, password)
+def register_user(username, password, name, email, role='user'):
+    """تسجيل مستخدم جديد"""
+    try:
+        conn = sqlite3.connect('data/system.db')
+        c = conn.cursor()
+        
+        hashed_password = hash_password(password)
+        
+        c.execute('INSERT INTO users (username, password, name, email, role) VALUES (?, ?, ?, ?, ?)',
+                  (username, hashed_password, name, email, role))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except:
+        return False
+
+def get_all_users():
+    """الحصول على جميع المستخدمين"""
+    conn = sqlite3.connect('data/system.db')
+    c = conn.cursor()
     
-    # التحقق من حالة الجلسة
-    if 'authenticated' in st.session_state and st.session_state.authenticated:
-        return {
-            "username": st.session_state.get('user_name', ''),
-            "role": st.session_state.get('user_role', 'guest'),
-            "name": st.session_state.get('user_name', 'مستخدم')
-        }
+    c.execute('SELECT username, name, email, role, created_at FROM users ORDER BY created_at DESC')
+    users = c.fetchall()
     
-    return None
+    conn.close()
+    
+    return [{
+        'username': u[0],
+        'name': u[1],
+        'email': u[2],
+        'role': u[3],
+        'created_at': u[4]
+    } for u in users]
 
 def logout():
     """تسجيل الخروج"""
-    st.session_state.authenticated = False
-    st.session_state.user_role = None
-    st.session_state.user_name = ""
-
-def check_permission(required_role):
-    """التحقق من صلاحية المستخدم"""
-    current_role = st.session_state.get('user_role', 'guest')
-    
-    # ترتيب الأدوار (من الأعلى صلاحية إلى الأقل)
-    role_hierarchy = {
-        'admin': 4,
-        'committee': 3,
-        'valuer': 2,
-        'dataentry': 1,
-        'guest': 0
-    }
-    
-    current_level = role_hierarchy.get(current_role, 0)
-    required_level = role_hierarchy.get(required_role, 0)
-    
-    return current_level >= required_level
+    return True
