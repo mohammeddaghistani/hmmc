@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-
+import plotly.express as px
 # الوحدات النمطية
 from modules.db import init_db, ensure_settings
 from modules.auth import login_required, logout
