@@ -1,0 +1,9 @@
+def get_coordinates_from_address(address):
+    try:
+        geolocator = Nominatim(user_agent="rental_app")
+        location = geolocator.geocode(address)
+        if location:
+            return location.latitude, location.longitude
+    except:
+        return None
+    return None
