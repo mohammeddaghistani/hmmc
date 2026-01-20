@@ -140,6 +140,56 @@ def render_committee_page():
     st.header("👥 لجنة الاستثمار")
     system = InvestmentCommitteeSystem()
     st.write("إدارة قرارات اللجنة وفقاً للمادة 17 من اللائحة.")
+import streamlit as st
+from streamlit_folium import st_folium
+import folium
+from geopy.geocoders import Nominatim # متوفر في requirements 
+
+# ... الأكواد السابقة في app.py ...
+
+class EnhancedSiteRentalValuation(SiteRentalValuation):
+    def render_site_info_tab(self):
+        st.subheader("📍 تحديد الموقع الجغرافي")
+        
+        # إعداد الخريطة التفاعلية
+        col_map, col_inputs = st.columns([2, 1])
+        
+        with col_map:
+            st.info("قم بالنقر على الخريطة لتحديد موقع العقار بدقة")
+            # إحداثيات افتراضية (مركز المملكة)
+            m = folium.Map(location=[24.7136, 46.6753], zoom_start=6)
+            
+            # إضافة أداة النقر للحصول على الإحداثيات
+            m.add_child(folium.LatLngPopup())
+            
+            # عرض الخريطة واستقبال بيانات النقر
+            map_data = st_folium(m, height=400, width="100%")
+            
+            lat, lng = None, None
+            if map_data and map_data.get("last_clicked"):
+                lat = map_data["last_clicked"]["lat"]
+                lng = map_data["last_clicked"]["lng"]
+                st.success(f"تم تحديد الإحداثيات: {lat:.5f}, {lng:.5f}")
+
+        with col_inputs:
+            with st.form("site_info_form_map"):
+                site_name = st.text_input("اسم الموقع الرسمي")
+                site_area = st.number_input("مساحة الموقع (م²)", min_value=1.0)
+                city = st.selectbox("المدينة", ["الرياض", "جدة", "الدمام", "مكة", "المدينة"])
+                
+                # تخزين الإحداثيات المستخرجة من الخريطة
+                st.text_input("خط العرض (Latitude)", value=lat if lat else "", disabled=True)
+                st.text_input("خط الطول (Longitude)", value=lng if lng else "", disabled=True)
+                
+                if st.form_submit_button("💾 حفظ الموقع والبيانات"):
+                    st.session_state.site_info = {
+                        'name': site_name, 
+                        'area': site_area, 
+                        'city': city,
+                        'lat': lat,
+                        'lng': lng
+                    }
+                    st.success("✅ تم حفظ البيانات الجغرافية بنجاح")
 
 if __name__ == "__main__":
     init_db()
