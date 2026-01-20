@@ -5,3 +5,4 @@ enableXsrfProtection = false
 
 [browser]
 gatherUsageStats = false
+# تأكد تماماً من عدم وجود سطر userAgent هنا
