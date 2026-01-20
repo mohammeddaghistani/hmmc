@@ -11,84 +11,51 @@ from modules.investment_committee import InvestmentCommitteeSystem
 from modules.municipal_lease_types import MunicipalLeaseTypes
 from modules.site_rental_value import SiteRentalValuation
 
-# تهيئة النظام الأساسي
 apply_custom_style()
 init_db()
 ensure_settings()
 
-class EnhancedApp:
-    def __init__(self):
-        self.lease_manager = MunicipalLeaseTypes()
-        self.committee_manager = InvestmentCommitteeSystem()
-        self.valuator = SiteRentalValuation()
+class EnhancedSiteRentalValuation(SiteRentalValuation):
+    """تطوير واجهة تحديد القيمة الإيجارية للمواقع"""
+    def render_enhanced_valuation(self):
+        tab1, tab2, tab3 = st.tabs(["📍 الموقع والخريطة المزدوجة", "💰 حساب القيمة", "📄 المسودة"])
+        with tab1: self.render_dual_map_tab()
+        with tab2: self.render_calculations_tab()
+        with tab3: self.render_contract_tab()
 
-    def render_dual_map(self):
-        """تفعيل الخريطة المزدوجة (Satellite + Street)"""
-        st.subheader("📍 تحديد الموقع الجغرافي (عرض الأقمار الصناعية)")
-        
-        map_type = st.radio("نوع العرض", ["أقمار صناعية (Satellite)", "خريطة الشوارع"], horizontal=True)
+    def render_dual_map_tab(self):
+        st.subheader("📍 تحديد الموقع (عرض الأقمار الصناعية متاح)")
+        map_type = st.radio("نوع الخريطة", ["خريطة الشوارع", "أقمار صناعية (Satellite)"], horizontal=True)
         tiles = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" if "أقمار" in map_type else "OpenStreetMap"
-        attr = "Esri Satellite Imagery" if "أقمار" in map_type else "OpenStreetMap"
-
+        attr = "Esri Satellite" if "أقمار" in map_type else "OSM"
+        
         m = folium.Map(location=[24.7136, 46.6753], zoom_start=6, tiles=tiles, attr=attr)
         m.add_child(folium.LatLngPopup())
-        
-        output = st_folium(m, height=450, width="100%", key="main_map")
-        
+        output = st_folium(m, height=400, width="100%", key="site_map")
         if output.get("last_clicked"):
             st.session_state.lat = output["last_clicked"]["lat"]
             st.session_state.lng = output["last_clicked"]["lng"]
-            st.success(f"📍 تم تحديد الموقع: {st.session_state.lat:.5f}, {st.session_state.lng:.5f}")
+            st.success(f"تم تحديد الإحداثيات: {st.session_state.lat:.5f}, {st.session_state.lng:.5f}")
 
-    def run(self):
-        st.markdown(get_custom_css(), unsafe_allow_html=True)
-        if 'authenticated' not in st.session_state: st.session_state.authenticated = False
+    def render_calculations_tab(self):
+        # استرجاع منطق الحسابات الأصلي وربطه بالمعدلات من الإدارة
+        area = st.number_input("المساحة م²", value=1000.0)
+        base_p = st.number_input("السعر الاسترشادي", value=200.0)
+        # جلب المعامل المحدث من قاعدة البيانات
+        mult = float(get_setting('mult_temp', 0.85))
+        st.metric("القيمة الإيجارية السنوية", f"{area * base_p * mult:,.2f} ريال")
 
-        if not st.session_state.authenticated:
-            self.render_login()
-        else:
-            self.render_main_interface()
+def main():
+    st.markdown(get_custom_css(), unsafe_allow_html=True)
+    with st.sidebar:
+        st.title("🏛️ نظام التأجير البلدي")
+        choice = st.radio("القائمة", ["📊 لوحة التحكم", "📈 التقييم العلمي", "📍 القيمة الإيجارية", "👥 اللجنة", "⚙️ الإعدادات"])
 
-    def render_login(self):
-        st.markdown('<div class="main-header"><h1>🏛️ نظام تأجير العقارات البلدية</h1></div>', unsafe_allow_html=True)
-        with st.form("login"):
-            u = st.text_input("اسم المستخدم")
-            p = st.text_input("كلمة المرور", type="password")
-            if st.form_submit_button("دخول"):
-                st.session_state.authenticated = True
-                st.rerun()
-
-    def render_main_interface(self):
-        with st.sidebar:
-            st.title("القائمة الرئيسية")
-            choice = st.radio("انتقل إلى:", ["📊 لوحة التحكم", "📈 التقييم الإيجاري", "👥 لجنة الاستثمار", "📑 التقارير", "⚙️ الإعدادات"])
-        
-        if choice == "📊 لوحة التحكم": render_dashboard('admin')
-        elif choice == "📈 التقييم الإيجاري": self.render_valuation_page()
-        elif choice == "👥 لجنة الاستثمار": self.committee_manager.render_committee_module()
-        elif choice == "📑 التقارير": render_report_module('admin')
-        elif choice == "⚙️ الإعدادات": render_admin_panel('admin')
-
-    def render_valuation_page(self):
-        st.header("📍 تقييم القيمة الإيجارية للموقع")
-        self.render_dual_map()
-        
-        st.divider()
-        selected_key = self.lease_manager.render_lease_type_selection()
-        
-        # جلب المعامل من الإعدادات العامة
-        mult_key = self.lease_manager.lease_types[selected_key]['multiplier_key']
-        multiplier = float(get_setting(mult_key, 1.0))
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            area = st.number_input("المساحة الإجمالية م²", value=500.0)
-            base_p = st.number_input("السعر الاسترشادي للمتر (ريال)", value=200.0)
-        with col2:
-            final_rent = area * base_p * multiplier
-            st.metric("القيمة الإيجارية السنوية", f"{final_rent:,.2f} ريال")
-            st.caption(f"تم تطبيق معامل ضرب: {multiplier}")
+    if choice == "📊 لوحة التحكم": render_dashboard('admin')
+    elif choice == "📈 التقييم العلمي": render_evaluation_module('admin')
+    elif choice == "📍 القيمة الإيجارية": EnhancedSiteRentalValuation().render_enhanced_valuation()
+    elif choice == "👥 اللجنة": InvestmentCommitteeSystem().render_committee_module()
+    elif choice == "⚙️ الإعدادات": render_admin_panel('admin')
 
 if __name__ == "__main__":
-    app = EnhancedApp()
-    app.run()
+    main()
