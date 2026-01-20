@@ -1,7 +1,7 @@
 import numpy as np
 
 class ValuationMethods:
-    """منهجيات التقييم العقاري العلمية IVS"""
+    """منهجيات التقييم العقاري العلمية وفق المعايير الدولية IVS"""
     
     def sales_comparison_method(self, base_price, adjustments):
         """معادلة مقارنة المبيعات"""
@@ -13,18 +13,13 @@ class ValuationMethods:
         return max(0, gdv - (const_cost * (1 + profit_margin)))
 
     def dcf_method(self, annual_income, discount_rate, years, growth_rate=0.02):
-        """معادلة التدفقات النقدية المخصومة"""
-        pv = sum([ (annual_income * (1 + growth_rate)**t) / (1 + discount_rate)**(t+1) for t in range(years)])
+        """معادلة التدفقات النقدية المخصومة NPV"""
+        pv = sum([(annual_income * (1 + growth_rate)**t) / (1 + discount_rate)**(t+1) for t in range(int(years))])
         return pv
-
-    def profits_method(self, revenue, operating_costs, rent_share):
-        """معادلة الأرباح"""
-        return max(0, (revenue - operating_costs) * rent_share)
 
 def apply_valuation_method(method_name, property_data, additional_data=None):
     vm = ValuationMethods()
     adj = additional_data.get('adjustments_matrix', {}) if additional_data else {}
-    
     if method_name == 'sales_comparison':
         val = vm.sales_comparison_method(property_data.get('base_price', 0), adj)
         return {'total_value': val * property_data.get('land_area', 1), 'method': 'مقارنة المبيعات'}
