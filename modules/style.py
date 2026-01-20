@@ -52,6 +52,7 @@ def get_custom_css():
         text-align: center;
     }
 
+
     /* تنسيق الجوال */
     @media (max-width: 768px) {
         .main-header h1 { font-size: 1.4rem !important; }
