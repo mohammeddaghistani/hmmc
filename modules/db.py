@@ -7,7 +7,6 @@ import streamlit as st
 def init_db():
     conn = sqlite3.connect('rental_evaluation.db')
     cursor = conn.cursor()
-    # الجداول الأصلية
     cursor.execute('''CREATE TABLE IF NOT EXISTS deals (
         id INTEGER PRIMARY KEY AUTOINCREMENT, property_type TEXT, location TEXT, 
         area REAL, price REAL, deal_date DATE, latitude REAL, longitude REAL, 
@@ -30,7 +29,6 @@ def ensure_settings():
     conn.commit(); conn.close()
 
 def add_deal(deal_data):
-    """إضافة صفقة جديدة (المطلوبة في app.py)"""
     conn = sqlite3.connect('rental_evaluation.db')
     cursor = conn.cursor()
     cursor.execute('''INSERT INTO deals (property_type, location, area, price, deal_date, latitude, longitude, activity_type) 
@@ -42,16 +40,3 @@ def add_deal(deal_data):
     conn.commit(); conn.close()
     st.cache_data.clear()
     return deal_id
-
-def add_evaluation(evaluation_data):
-    """إضافة تقييم جديد"""
-    conn = sqlite3.connect('rental_evaluation.db')
-    cursor = conn.cursor()
-    cursor.execute('''INSERT INTO evaluations (deal_id, property_address, property_type, estimated_value, 
-                      confidence_score, confidence_level, evaluation_method, similar_deals, notes, created_by, status) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
-                   (evaluation_data.get('deal_id'), evaluation_data['property_address'], evaluation_data['property_type'],
-                    evaluation_data['estimated_value'], evaluation_data['confidence_score'], evaluation_data['confidence_level'],
-                    evaluation_data['evaluation_method'], json.dumps(evaluation_data.get('similar_deals', [])),
-                    evaluation_data.get('notes', ''), evaluation_data['created_by'], evaluation_data.get('status', 'pending')))
-    conn.commit(); conn.close()
