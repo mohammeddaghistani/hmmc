@@ -3,55 +3,43 @@ from datetime import datetime
 import uuid
 
 class InvestmentCommitteeSystem:
-    """نظام إدارة لجان الاستثمار البلدية وتحديد القيم الإيجارية حسب اللوائح"""
+    """نظام تكوين لجان الاستثمار وإصدار القرارات"""
     
-    def __init__(self):
-        if 'committee_decisions' not in st.session_state:
-            st.session_state.committee_decisions = []
+    def render_committee_module(self):
+        st.subheader("👥 تكوين لجنة الاستثمار (المادة 17)")
+        
+        with st.form("committee_formation"):
+            col1, col2 = st.columns(2)
+            with col1:
+                municipality = st.text_input("الأمانة / البلدية", value="أمانة منطقة الرياض")
+                members_count = st.number_input("عدد الأعضاء", min_value=3, value=3)
+            with col2:
+                chairman = st.text_input("رئيس اللجنة", value="وكيل الأمانة للاستثمار")
+                formation_date = st.date_input("تاريخ التكوين")
+            
+            st.info("يتكون تشكيل اللجنة من ممثلي الوزارة وممثل وزارة المالية حسب النظام.")
+            
+            if st.form_submit_button("✅ اعتماد تشكيل اللجنة"):
+                st.session_state.committee_active = {
+                    'id': f"COMM-{datetime.now().year}-{uuid.uuid4().hex[:4].upper()}",
+                    'municipality': municipality,
+                    'chairman': chairman,
+                    'status': 'نشطة'
+                }
+                st.success(f"تم اعتماد اللجنة برقم: {st.session_state.committee_active['id']}")
 
-    def form_committee(self, municipality, site_data):
-        """تشكيل لجنة استثمار جديدة لموقع محدد وفقاً للمادة 17 من اللائحة"""
-        committee_id = f"COM-{datetime.now().strftime('%Y')}-{uuid.uuid4().hex[:4].upper()}"
+    def render_decision_maker(self, site_area, base_price, lease_multiplier):
+        """إصدار قرار تحديد القيمة الإيجارية"""
+        if 'committee_active' not in st.session_state:
+            st.warning("⚠️ يجب تكوين اللجنة أولاً لإصدار القرار")
+            return
+            
+        st.subheader("📝 قرار تحديد القيمة الإيجارية")
+        guide_price = site_area * base_price * lease_multiplier
         
-        committee = {
-            'id': committee_id,
-            'municipality': municipality,
-            'formation_date': datetime.now().strftime("%Y-%m-%d"),
-            'site_code': site_data.get('site_code', 'غير محدد'),
-            'members': [
-                {'name': 'رئيس اللجنة', 'role': 'رئيس'},
-                {'name': 'عضو استثماري', 'role': 'عضو'},
-                {'name': 'أمين اللجنة', 'role': 'عضو مقرر'}
-            ]
-        }
-        st.success(f"✅ تم تشكيل اللجنة بنجاح: {committee_id}")
-        return committee
-
-    def determine_rental_value(self, committee_id, site_data, lease_type):
-        """تحديد القيمة الإيجارية بناءً على معطيات الموقع ونوع التأجير"""
-        area = site_data.get('area', 1.0)
-        base_rate = 100.0  
-        
-        multipliers = {
-            'TEMPORARY_ACTIVITY': 0.85,
-            'LONG_TERM_INVESTMENT': 1.6,
-            'DIRECT_LEASE': 1.25,
-            'EXEMPTED_FROM_COMPETITION': 1.1
-        }
-        
-        multiplier = multipliers.get(lease_type, 1.0)
-        guide_price = area * base_rate * multiplier
-        
-        decision = {
-            'id': f"DEC-{uuid.uuid4().hex[:6].upper()}",
-            'committee_id': committee_id,
-            'lease_type': lease_type,
-            'decision_date': datetime.now().isoformat(),
-            'guide_price': guide_price,
-            'proposed_rent': {
-                'monthly_total': guide_price / 12,
-                'monthly_per_m2': (guide_price / 12) / area
-            }
-        }
-        st.session_state.committee_decisions.append(decision)
-        return decision
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("القيمة الاسترشادية (سنوياً)", f"{guide_price:,.2f} ريال")
+        with col2:
+            st.write(f"رقم اللجنة: {st.session_state.committee_active['id']}")
+            st.write(f"رئيس اللجنة: {st.session_state.committee_active['chairman']}")
