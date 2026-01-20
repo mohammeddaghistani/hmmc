@@ -127,7 +127,8 @@ class SiteRentalValuation:
                     "القيمة المتبقية للتطوير",
                     "نسبة من قيمة الأرض",
                     "طريقة الدخل (للمواقع التجارية)",
-                    "طريقة التكلفة (للمواقع المبنية)"
+                    "طريقة التكلفة (للمواقع المبنية)",
+                    "تحليل IRR للاستثمار"
                 ]
             )
             
@@ -141,6 +142,8 @@ class SiteRentalValuation:
                 self.render_income_method()
             elif method == "طريقة التكلفة (للمواقع المبنية)":
                 self.render_cost_method()
+            elif method == "تحليل IRR للاستثمار":
+                self.render_irr_analysis()
             
             st.markdown("---")
             
@@ -534,6 +537,135 @@ class SiteRentalValuation:
         - تعكس قيمة الأرض والبناء معاً
         """)
     
+    def render_irr_analysis(self):
+        """تحليل معدل العائد الداخلي (IRR)"""
+        
+        st.info("📊 تحليل IRR للاستثمار في الموقع")
+        
+        tab1, tab2 = st.tabs(["التدفقات النقدية", "التحليل"])
+        
+        with tab1:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("💰 الاستثمار الأولي")
+                purchase_price = st.number_input("سعر الشراء (ريال)", value=1000000.0)
+                closing_costs = st.slider("تكاليف الإتمام %", 1, 10, 3)
+                renovation_costs = st.number_input("تكاليف التحسين (ريال)", value=200000.0)
+            
+            with col2:
+                st.subheader("📈 الدخل المتوقع")
+                initial_rent = st.number_input("الإيجار السنوي الأول (ريال)", value=80000.0)
+                rent_growth = st.slider("نمو الإيجار السنوي %", 0, 15, 5)
+                lease_term = st.slider("فترة الاستثمار (سنوات)", 5, 30, 10)
+        
+        with tab2:
+            col3, col4 = st.columns(2)
+            
+            with col3:
+                st.subheader("💸 المصاريف التشغيلية")
+                operating_expenses = st.slider("نسبة المصاريف التشغيلية %", 15, 50, 25)
+                property_tax = st.slider("الضرائب السنوية %", 0, 5, 1.5)
+                insurance_rate = st.slider("التأمين % من القيمة", 0.1, 2.0, 0.5)
+            
+            with col4:
+                st.subheader("🏁 قيمة الخروج")
+                exit_cap_rate = st.slider("معدل الرسملة عند البيع %", 4, 12, 8)
+                selling_costs = st.slider("تكاليف البيع %", 3, 10, 6)
+        
+        # حساب التدفقات النقدية
+        total_investment = purchase_price * (1 + closing_costs/100) + renovation_costs
+        annual_operating_cost = purchase_price * (operating_expenses/100 + property_tax/100 + insurance_rate/100)
+        
+        # توليد التدفقات النقدية
+        cash_flows = [-total_investment]  # الاستثمار الأولي
+        
+        for year in range(1, lease_term + 1):
+            annual_rent = initial_rent * ((1 + rent_growth/100) ** (year-1))
+            net_operating_income = annual_rent - annual_operating_cost
+            cash_flows.append(net_operating_income)
+        
+        # حساب قيمة الخروج
+        final_noi = initial_rent * ((1 + rent_growth/100) ** (lease_term-1))
+        property_value_exit = final_noi / (exit_cap_rate/100)
+        net_proceeds = property_value_exit * (1 - selling_costs/100)
+        cash_flows[-1] += net_proceeds  # إضافة عائد البيع في السنة الأخيرة
+        
+        # حساب IRR
+        irr = self.calculate_irr(cash_flows)
+        total_return = sum(cash_flows[1:]) - total_investment
+        roi = (total_return / total_investment) * 100
+        
+        st.markdown("### 📊 نتائج تحليل IRR")
+        
+        col_res1, col_res2, col_res3 = st.columns(3)
+        
+        with col_res1:
+            st.metric("IRR السنوي", f"{irr:.1f}%")
+        
+        with col_res2:
+            st.metric("إجمالي العائد", f"{total_return:,.0f} ريال")
+        
+        with col_res3:
+            st.metric("نسبة ROI", f"{roi:.1f}%")
+        
+        # جدول التدفقات النقدية
+        st.markdown("### 📅 جدول التدفقات النقدية")
+        
+        cash_flow_data = []
+        for i, cf in enumerate(cash_flows):
+            year_label = "الاستثمار" if i == 0 else f"السنة {i}"
+            cash_flow_data.append({
+                'السنة': year_label,
+                'التدفق النقدي': f"{cf:,.0f} ريال",
+                'تراكمي': f"{sum(cash_flows[:i+1]):,.0f} ريال"
+            })
+        
+        st.dataframe(pd.DataFrame(cash_flow_data), use_container_width=True)
+        
+        st.info(f"""
+        **تفسير النتائج:**
+        - IRR = {irr:.1f}%: معدل العائد السنوي المحقق
+        - ROI = {roi:.1f}%: العائد الإجمالي على الاستثمار
+        - فترة الاسترداد: {self.calculate_payback_period(cash_flows):.1f} سنة
+        - مستوى المخاطرة: {'منخفض' if irr > 12 else 'متوسط' if irr > 8 else 'مرتفع'}
+        """)
+    
+    def calculate_irr(self, cash_flows, iterations=1000):
+        """حساب معدل العائد الداخلي باستخدام طريقة نيوتن-رافسون"""
+        
+        if len(cash_flows) < 2:
+            return 0
+        
+        # استخدام طريقة تقريبية مبسطة
+        guess = 0.1  # تخمين ابتدائي 10%
+        
+        for _ in range(iterations):
+            npv = 0
+            d_npv = 0
+            
+            for t, cf in enumerate(cash_flows):
+                npv += cf / ((1 + guess) ** t)
+                d_npv -= t * cf / ((1 + guess) ** (t + 1))
+            
+            if abs(npv) < 0.01:
+                break
+            
+            guess = guess - npv / d_npv
+        
+        return max(0, guess * 100)  # إرجاع النسبة المئوية
+    
+    def calculate_payback_period(self, cash_flows):
+        """حساب فترة الاسترداد"""
+        
+        cumulative = 0
+        for i, cf in enumerate(cash_flows):
+            cumulative += cf
+            if cumulative >= 0:
+                return i - 1 + abs(cash_flows[i-1]) / cf if i > 0 else 0
+        
+        return len(cash_flows)  # إذا لم يتم الاسترداد
+    
     def calculate_site_rental_value(self, site_data, method):
         """حساب القيمة الإيجارية للموقع"""
         
@@ -570,6 +702,12 @@ class SiteRentalValuation:
                     "2. تطبيق الإهلاك والاستهلاك",
                     "3. تحديد القيمة الحالية",
                     "4. حساب العائد المطلوب"
+                ],
+                "تحليل IRR للاستثمار": [
+                    "1. حساب التدفقات النقدية",
+                    "2. تحديد تكاليف الاستثمار",
+                    "3. حساب IRR وROI",
+                    "4. تحليل المخاطر والعائد"
                 ]
             }
             
@@ -608,6 +746,8 @@ class SiteRentalValuation:
                 return self._calculate_by_income(site_data)
             elif method == "طريقة التكلفة (للمواقع المبنية)":
                 return self._calculate_by_cost(site_data)
+            elif method == "تحليل IRR للاستثمار":
+                return self._calculate_irr_results(site_data)
         except Exception as e:
             st.error(f"❌ خطأ في الحساب: {str(e)}")
             return None
@@ -800,6 +940,28 @@ class SiteRentalValuation:
             'confidence_score': 0.65
         }
     
+    def _calculate_irr_results(self, site_data):
+        """حساب نتائج IRR"""
+        
+        # قيم افتراضية
+        cash_flows = [-1000000, 80000, 84000, 88200, 92610, 97241]
+        irr = self.calculate_irr(cash_flows)
+        total_return = sum(cash_flows[1:]) - abs(cash_flows[0])
+        roi = (total_return / abs(cash_flows[0])) * 100
+        
+        return {
+            'method': 'irr',
+            'irr_percentage': round(irr, 2),
+            'total_return': round(total_return, 2),
+            'roi_percentage': round(roi, 2),
+            'investment_amount': abs(cash_flows[0]),
+            'annual_rent': cash_flows[1],
+            'monthly_rent': cash_flows[1] / 12,
+            'rent_per_m2': cash_flows[1] / site_data['area'],
+            'cash_flows': cash_flows,
+            'confidence_score': 0.85
+        }
+    
     def display_site_rental_results(self, results, site_data):
         """عرض نتائج تحديد القيمة الإيجارية"""
         
@@ -810,10 +972,16 @@ class SiteRentalValuation:
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("💰 الإيجار السنوي", f"{results['annual_rent']:,.0f} ر.س")
+            if 'annual_rent' in results:
+                st.metric("💰 الإيجار السنوي", f"{results['annual_rent']:,.0f} ر.س")
+            elif 'irr_percentage' in results:
+                st.metric("📈 معدل IRR", f"{results['irr_percentage']:.1f}%")
         
         with col2:
-            st.metric("📅 الإيجار الشهري", f"{results['monthly_rent']:,.0f} ر.س")
+            if 'monthly_rent' in results:
+                st.metric("📅 الإيجار الشهري", f"{results['monthly_rent']:,.0f} ر.س")
+            elif 'roi_percentage' in results:
+                st.metric("🎯 عائد ROI", f"{results['roi_percentage']:.1f}%")
         
         with col3:
             if 'rent_per_m2' in results:
@@ -842,6 +1010,8 @@ class SiteRentalValuation:
             self._display_income_details(results)
         elif results['method'] == 'cost':
             self._display_cost_details(results)
+        elif results['method'] == 'irr':
+            self._display_irr_details(results)
         
         # خيارات إضافية
         st.markdown("---")
@@ -1000,6 +1170,33 @@ class SiteRentalValuation:
         - هذه الطريقة مناسبة للمباني الجديدة
         - تأخذ في الاعتبار تكلفة إعادة الإنشاء
         - تعكس القيمة الاقتصادية الحقيقية
+        """)
+    
+    def _display_irr_details(self, results):
+        """عرض تفاصيل تحليل IRR"""
+        
+        st.subheader("📈 تفاصيل تحليل IRR")
+        
+        st.write(f"""
+        **نتائج الاستثمار:**
+        - معدل العائد الداخلي (IRR): {results.get('irr_percentage', 0):.1f}%
+        - إجمالي العائد على الاستثمار (ROI): {results.get('roi_percentage', 0):.1f}%
+        - قيمة الاستثمار الأولي: {results.get('investment_amount', 0):,.0f} ريال
+        - إجمالي العائد: {results.get('total_return', 0):,.0f} ريال
+        """)
+        
+        if results.get('cash_flows'):
+            st.write("**التدفقات النقدية:**")
+            for i, cf in enumerate(results['cash_flows']):
+                year_label = "الاستثمار" if i == 0 else f"السنة {i}"
+                st.write(f"- {year_label}: {cf:,.0f} ريال")
+        
+        st.info(f"""
+        **تقييم IRR:**
+        - IRR > 15%: استثمار ممتاز
+        - IRR بين 10-15%: استثمار جيد
+        - IRR بين 5-10%: استثمار مقبول
+        - IRR < 5%: استثمار ضعيف
         """)
     
     def show_detailed_analysis(self, results, site_data):
