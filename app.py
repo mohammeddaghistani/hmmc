@@ -17,25 +17,14 @@ from modules.site_rental_value import SiteRentalValuation
 from modules.municipal_lease_types import MunicipalLeaseTypes
 from modules.investment_committee import InvestmentCommitteeSystem
 
-# تطبيق التصميم والتهيئة
+# تهيئة التصميم والبيئة
 apply_custom_style()
 
-def get_coordinates_from_address(address):
-    """تحويل العنوان النصي إلى إحداثيات جغرافية"""
-    try:
-        geolocator = Nominatim(user_agent="rental_app")
-        location = geolocator.geocode(address)
-        if location:
-            return location.latitude, location.longitude
-    except:
-        return None
-    return None
-
 class EnhancedSiteRentalValuation(SiteRentalValuation):
-    """نسخة احترافية تدمج الخريطة مع منطق التقييم والعقود الأصلي"""
+    """النسخة الاحترافية التي تدمج الخريطة مع منطق التقييم والعقود الأصلي"""
     
     def render_enhanced_valuation(self):
-        tab1, tab2, tab3 = st.tabs(["📍 معلومات الموقع والخريطة", "💰 التقييم الإيجاري", "📄 العقد والموافقات"])
+        tab1, tab2, tab3 = st.tabs(["📍 معلومات الموقع والخريطة", "💰 الحسابات التقديرية", "📄 مسودة العقد"])
         with tab1: self.render_site_info_tab()
         with tab2: self.render_valuation_tab()
         with tab3: self.render_contract_tab()
@@ -71,7 +60,7 @@ class EnhancedSiteRentalValuation(SiteRentalValuation):
                     st.success("✅ تم حفظ معلومات الموقع")
 
     def render_valuation_tab(self):
-        st.subheader("💰 التقييم الإيجاري")
+        st.subheader("💰 حساب القيمة الإيجارية")
         if 'site_info' not in st.session_state:
             st.warning("⚠️ يرجى تحديد الموقع أولاً")
             return
@@ -100,12 +89,10 @@ class EnhancedSiteRentalValuation(SiteRentalValuation):
         
         st.info("تم توليد مسودة العقد بناءً على البيانات المدخلة.")
         if st.button("📝 عرض مسودة الاتفاقية"):
-            # استدعاء عرض المسودة الأصلي من الكلاس الأب
             self.show_agreement_preview(st.session_state.calculated_rent, st.session_state.site_info['zoning'])
 
 def main():
     st.markdown(get_custom_css(), unsafe_allow_html=True)
-    
     if 'authenticated' not in st.session_state: st.session_state.authenticated = False
     if 'current_page' not in st.session_state: st.session_state.current_page = "dashboard"
 
@@ -158,7 +145,6 @@ def render_sidebar_app():
         valuator.render_enhanced_valuation()
     elif cp == 'committee':
         st.header("👥 لجنة الاستثمار")
-        # استرجاع المنطق الأصلي للجنة
         comm = InvestmentCommitteeSystem()
         comm.form_committee("الأمانة", st.session_state.get('site_info', {}))
     elif cp == 'reports': render_report_module(st.session_state.user_role)
