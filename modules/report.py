@@ -28,7 +28,8 @@ class PDFReport(FPDF):
             
         # إضافة خط يدعم العربية
         try:
-            self.add_font('DejaVu', '', 'fonts/DejaVuSans.ttf')
+            if 'DejaVu' not in self.fonts:
+                self.add_font('DejaVu', '', 'fonts/DejaVuSans.ttf')
             self.set_font('DejaVu', '', 16)
         except:
             self.set_font('Arial', 'B', 16)
@@ -40,7 +41,8 @@ class PDFReport(FPDF):
     def footer(self):
         self.set_y(-15)
         try:
-            self.add_font('DejaVu', '', 'fonts/DejaVuSans.ttf')
+            if 'DejaVu' not in self.fonts:
+                self.add_font('DejaVu', '', 'fonts/DejaVuSans.ttf')
             self.set_font('DejaVu', '', 8)
         except:
             self.set_font('Arial', 'I', 8)
@@ -51,15 +53,18 @@ class PDFReport(FPDF):
     def add_arabic_content(self, text):
         """إضافة نص عربي مع حل مشكلة المساحة الأفقية (Horizontal Space)"""
         try:
-            self.add_font('DejaVu', '', 'fonts/DejaVuSans.ttf')
+            # إضافة الخط مرة واحدة فقط لتجنب تعارض الذاكرة
+            if 'DejaVu' not in self.fonts:
+                self.add_font('DejaVu', '', 'fonts/DejaVuSans.ttf')
             self.set_font('DejaVu', '', 12)
         except:
             st.error("خطأ: ملف الخط غير موجود في fonts/DejaVuSans.ttf")
             return
             
-        # ضبط الهوامش لضمان توفر مساحة كافية للرسم
+        # ضبط الهوامش لضمان توفر مساحة كافية
         self.set_right_margin(15)
         self.set_left_margin(15)
+        left_margin = self.l_margin
         
         # معالجة النص أسطر بأسطر لتجنب أخطاء المساحة
         for line in text.split('\n'):
@@ -68,6 +73,8 @@ class PDFReport(FPDF):
                 continue
             
             processed_line = fix_arabic(line)
+            # إعادة ضبط موقع X قبل كل خلية لضمان وجود مساحة كافية
+            self.set_x(left_margin)
             # استخدام w=0 يخبر المكتبة باستخدام كامل العرض المتاح تلقائياً
             self.multi_cell(w=0, h=10, txt=processed_line, align='R')
 
@@ -135,7 +142,7 @@ def render_evaluation_reports():
                     st.warning(f"هل أنت متأكد من حذف التقرير {report['id']}?")
 
 def generate_pdf_report(report_data):
-    """توليد تقرير PDF مع إصلاح خطأ الترميز"""
+    """توليد تقرير PDF مع إصلاح خطأ الترميز والمساحة"""
     pdf = PDFReport()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
