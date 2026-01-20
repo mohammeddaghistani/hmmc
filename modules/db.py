@@ -5,36 +5,37 @@ import json
 import streamlit as st
 
 def init_db():
-    """تهيئة قاعدة البيانات بكافة الجداول المطلوبة"""
+    """تهيئة قاعدة البيانات بكافة الجداول الأصلية والمحدثة"""
     conn = sqlite3.connect('rental_evaluation.db')
     cursor = conn.cursor()
-    # جدول الصفقات
+    # جدول الصفقات (يدعم الإحداثيات)
     cursor.execute('''CREATE TABLE IF NOT EXISTS deals (
         id INTEGER PRIMARY KEY AUTOINCREMENT, property_type TEXT, location TEXT, 
         area REAL, price REAL, deal_date DATE, latitude REAL, longitude REAL, 
         activity_type TEXT, notes TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    # جدول الإعدادات
+    # جدول التقييمات
+    cursor.execute('''CREATE TABLE IF NOT EXISTS evaluations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, deal_id INTEGER, property_address TEXT, 
+        property_type TEXT, estimated_value REAL, confidence_score REAL, 
+        confidence_level TEXT, evaluation_method TEXT, similar_deals TEXT, 
+        notes TEXT, status TEXT DEFAULT 'pending', created_by TEXT, 
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (deal_id) REFERENCES deals (id))''')
+    # جدول الإعدادات للتحكم في المعدلات
     cursor.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
     conn.commit()
     conn.close()
 
 def ensure_settings():
-    """تثبيت كافة معدلات النظام في قاعدة البيانات للتحكم بها من الإدارة"""
+    """تثبيت معدلات النظام الأصلية في قاعدة البيانات للتحكم بها من واجهة الإدارة"""
     conn = sqlite3.connect('rental_evaluation.db')
     cursor = conn.cursor()
     defaults = [
         ('system_name', 'نظام التقييم الإيجاري البلدي'),
-        ('default_currency', 'ريال سعودي'),
-        ('tax_rate', '0.15'),
-        # معدلات أنواع التأجير (المعادلات)
-        ('mult_temporary', '0.85'),
-        ('mult_long_term', '1.60'),
-        ('mult_direct', '1.25'),
-        ('mult_exempt', '1.10'),
-        # إعدادات التقييم العلمي
-        ('default_yield', '0.08'),
-        ('default_discount_rate', '0.10'),
-        ('construction_cost_m2', '3500')
+        ('mult_temp', '0.85'),  # معامل التأجير المؤقت
+        ('mult_long', '1.60'),  # معامل الاستثمار طويل الأجل
+        ('mult_direct', '1.25'), # معامل التأجير المباشر
+        ('const_cost', '3500'), # تكلفة البناء للمتر
+        ('discount_rate', '0.10') # معدل الخصم DCF
     ]
     for key, value in defaults:
         cursor.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', (key, value))
@@ -57,6 +58,7 @@ def update_setting(key, value):
     conn.close()
 
 def add_deal(deal_data):
+    """إضافة صفقة مع الإحداثيات الجغرافية"""
     conn = sqlite3.connect('rental_evaluation.db')
     cursor = conn.cursor()
     cursor.execute('''INSERT INTO deals (property_type, location, area, price, deal_date, latitude, longitude, activity_type, notes) 
