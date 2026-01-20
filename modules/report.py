@@ -17,14 +17,27 @@ def fix_arabic(text):
     return get_display(reshaped_text)
 
 class PDFReport(FPDF):
-    """فئة مخصصة لتوليد تقارير PDF تدعم العربية مع إدارة المساحات"""
-    
-    def header(self):
-        # إضافة شعار (تأكد من وجود المجلد والصورة)
+    def __init__(self):
+        # تفعيل دعم Unicode عند إنشاء الكائن
+        super().__init__()
+        # تأكد من أن المسار صحيح لملف الخط الذي رفعته
         try:
-            self.image('assets/logo.png', 10, 8, 33)
-        except:
-            pass 
+            self.add_font('DejaVu', '', 'assets/DejaVuSans.ttf', uni=True) 
+        except Exception as e:
+            st.error(f"خطأ في تحميل الخط: {e}")
+
+    def header(self):
+        self.set_font('DejaVu', '', 16)
+        title = fix_arabic('تقرير التقييم العقاري')
+        # المحاذاة 'C' للنص العربي المعالج بـ fix_arabic
+        self.cell(0, 10, title, 0, 1, 'C')
+        self.ln(10)
+
+    def add_arabic_content(self, text):
+        self.set_font('DejaVu', '', 12)
+        # معالجة النص بالكامل قبل الإضافة
+        processed_text = fix_arabic(text)
+        self.multi_cell(0, 10, txt=processed_text, align='R')
             
         # إضافة خط يدعم العربية
         try:
