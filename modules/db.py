@@ -14,7 +14,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    # جدول المستخدمين
+    # 1. جدول المستخدمين
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   username TEXT UNIQUE,
@@ -24,15 +24,29 @@ def init_db():
                   role TEXT DEFAULT 'user',
                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     
-    # جدول الإعدادات
+    # 2. جدول الإعدادات
     c.execute('''CREATE TABLE IF NOT EXISTS settings
                  (key TEXT PRIMARY KEY,
                   value TEXT,
                   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+
+    # 3. جدول الصفقات/المواقع (الجدول الجديد المطلوب لعمل وظيفة الخريطة)
+    c.execute('''CREATE TABLE IF NOT EXISTS deals
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  property_type TEXT,
+                  location TEXT,
+                  area REAL,
+                  price REAL,
+                  deal_date DATE,
+                  latitude REAL,
+                  longitude REAL,
+                  activity_type TEXT,
+                  notes TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     
     conn.commit()
     conn.close()
-    ensure_settings() # التأكد من وجود القيم الافتراضية بعد إنشاء الجدول
+    ensure_settings() # التأكد من وجود القيم الافتراضية
 
 def ensure_settings():
     """تأكيد وجود الإعدادات الأساسية"""
@@ -55,6 +69,37 @@ def ensure_settings():
     
     conn.commit()
     conn.close()
+
+def add_deal(deal_data):
+    """إضافة صفقة أو موقع جديد من الخريطة إلى قاعدة البيانات"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        query = '''INSERT INTO deals 
+                   (property_type, location, area, price, deal_date, latitude, longitude, activity_type, notes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'''
+        
+        params = (
+            deal_data.get('property_type'),
+            deal_data.get('location'),
+            deal_data.get('area'),
+            deal_data.get('price', 0.0),
+            deal_data.get('deal_date'),
+            deal_data.get('latitude'),
+            deal_data.get('longitude'),
+            deal_data.get('activity_type'),
+            deal_data.get('notes')
+        )
+        
+        c.execute(query, params)
+        deal_id = c.lastrowid
+        conn.commit()
+        conn.close()
+        return deal_id
+    except Exception as e:
+        print(f"Error in add_deal: {e}")
+        return None
 
 # --- الدوال المطلوبة لعمل صفحة الإدارة (Admin Panel) ---
 
