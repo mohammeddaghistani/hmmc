@@ -6,3 +6,5 @@ fpdf2
 arabic-reshaper
 python-bidi
 rich>=10.14.0,<14
+streamlit-folium
+folium
