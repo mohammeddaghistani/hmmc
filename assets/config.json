@@ -1,5 +1,0 @@
-config = {
-    "browser": {
-        "userAgent": "Mozilla/5.0 ..."
-    }
-}
